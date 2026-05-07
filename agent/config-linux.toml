@@ -1,0 +1,9 @@
+[firebase]
+project_id  = "examguard-dev"
+database_url = "http://192.168.56.1:9000"   # Firebase RTDB emulator on host
+functions_url = "http://192.168.56.1:5001"  # Functions emulator on host
+
+[agent]
+agent_id   = "exam-linux-001"   # unique per VM
+session_id = "test-session-01"
+environment = "development"     # disables SSL verification for local emulator
