@@ -1,5 +1,35 @@
 # ExamGuard v2
 
+## Overview
+
+ExamGuard is a transparent, consent-based exam management system designed for institution-grade exam lockdown. It consists of three main components:
+
+1. **ExamGuard Agent**: A Rust daemon installed on student machines that applies OS-level firewall rules (nftables on Linux, WFP on Windows, pf on macOS) to block internet traffic except for lecturer-approved domains.
+
+2. **Firebase Backend**: Serverless infrastructure using Firebase Auth, Cloud Firestore, Realtime Database, Cloud Functions, and Firebase Hosting for zero maintenance.
+
+3. **Lecturer Console**: A Flutter Web/Desktop app where lecturers create exam sessions, select allowed internet services, and control locks in real-time across all student machines.
+
+### Key Features
+
+- **Africa-Focused Service Selector**: Curated list of commonly used internet services in Africa, organized by categories (Search Engines, AI Tools, Reference & Academic, etc.)
+- **Dynamic Whitelisting**: Lecturers select which services to allow per exam session, with automatic domain management
+- **Real-time Control**: LOCK/UNLOCK commands pushed instantly to all agents via Firebase RTDB
+- **Secure Testing Environment**: Mandatory VM-based testing to prevent accidental lockdown of development machines
+- **Cross-Platform Agents**: Support for Linux (nftables), Windows (WFP), and macOS (pf)
+
+### Architecture
+
+```
+Lecturer Console (Flutter) → Firebase RTDB/Firestore → Agents (Rust)
+       ↓
+Student Machines (Locked)
+```
+
+During active exams, agents block ALL internet traffic except:
+- Lecturer-selected whitelisted domains
+- Always-allowed Firebase endpoints (for agent communication)
+
 ## CRITICAL: Agent Testing — Always Use a VM
 
 ⚠ **NEVER** run `cargo run` or install the examguard-agent binary directly on the host Kali machine. Doing so will apply nftables/WFP DROP rules to the host's own network interfaces and will cut off internet access on your development machine. Always use a VM.
