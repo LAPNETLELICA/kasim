@@ -1,0 +1,410 @@
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import '../models/exam.dart';
+import '../services/api_service.dart';
+import 'exam_monitor_screen.dart';
+
+class DashboardScreen extends StatefulWidget {
+  final VoidCallback onLogout;
+  const DashboardScreen({super.key, required this.onLogout});
+
+  @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> {
+  List<ExamSession> exams = [];
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadExams();
+  }
+
+  Future<void> _loadExams() async {
+    setState(() => isLoading = true);
+    try {
+      final fetched = await ApiService.fetchExams();
+      setState(() {
+        exams = fetched;
+        isLoading = false;
+      });
+    } catch (e) {
+      setState(() => isLoading = false);
+    }
+  }
+
+  void _showCreateExamModal() {
+    showDialog(
+      context: context,
+      builder: (context) => const CreateExamDialog(),
+    ).then((_) => _loadExams());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0D1117),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF161B22),
+        elevation: 0,
+        title: const Row(
+          children: [
+            Icon(Icons.shield, color: Color(0xFF58A6FF)),
+            SizedBox(width: 10),
+            Text(
+              "Kasim Lecturer Portal",
+              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+            ),
+          ],
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh, color: Color(0xFF8B949E)),
+            onPressed: _loadExams,
+          ),
+          IconButton(
+            icon: const Icon(Icons.logout, color: Color(0xFFF85149)),
+            onPressed: widget.onLogout,
+          ),
+          const SizedBox(width: 16),
+        ],
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Exam Sessions",
+                      style: TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      "Create and monitor locked browser exam sessions",
+                      style: TextStyle(color: Color(0xFF8B949E)),
+                    ),
+                  ],
+                ),
+                ElevatedButton.icon(
+                  onPressed: _showCreateExamModal,
+                  icon: const Icon(Icons.add, color: Colors.white),
+                  label: const Text(
+                    "New Exam Session",
+                    style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF238636),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            Expanded(
+              child: isLoading
+                  ? const Center(child: CircularProgressIndicator(color: Color(0xFF58A6FF)))
+                  : exams.isEmpty
+                      ? _buildEmptyState()
+                      : ListView.builder(
+                          itemCount: exams.length,
+                          itemBuilder: (context, index) {
+                            final exam = exams[index];
+                            return _buildExamCard(exam);
+                          },
+                        ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.assignment_outlined, size: 64, color: Color(0xFF30363D)),
+          const SizedBox(height: 16),
+          const Text(
+            "No Exam Sessions Yet",
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            "Click 'New Exam Session' to create a session with an allowed browser policy.",
+            style: TextStyle(color: Color(0xFF8B949E)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildExamCard(ExamSession exam) {
+    final dateFormat = DateFormat('MMM dd, yyyy - HH:mm');
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFF161B22),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF30363D)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0D1117),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFF58A6FF).withOpacity(0.3)),
+            ),
+            child: Column(
+              children: [
+                const Text("EXAM CODE", style: TextStyle(fontSize: 10, color: Color(0xFF8B949E))),
+                const SizedBox(height: 4),
+                Text(
+                  exam.examCode,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF58A6FF),
+                    letterSpacing: 2,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 20),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      exam.title,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: exam.isActive ? const Color(0xFF1F6FEB).withOpacity(0.2) : Colors.grey.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: exam.isActive ? const Color(0xFF58A6FF) : Colors.grey,
+                        ),
+                      ),
+                      child: Text(
+                        exam.isActive ? "ACTIVE" : "INACTIVE",
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: exam.isActive ? const Color(0xFF58A6FF) : Colors.grey,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    const Icon(Icons.timer_outlined, size: 16, color: Color(0xFF8B949E)),
+                    const SizedBox(width: 6),
+                    Text(
+                      "${dateFormat.format(exam.startTime.toLocal())} → ${dateFormat.format(exam.endTime.toLocal())}",
+                      style: const TextStyle(color: Color(0xFF8B949E), fontSize: 13),
+                    ),
+                    const SizedBox(width: 20),
+                    const Icon(Icons.language, size: 16, color: Color(0xFF8B949E)),
+                    const SizedBox(width: 6),
+                    Text(
+                      "Allowed: ${exam.allowedBrowser}",
+                      style: const TextStyle(color: Color(0xFF58A6FF), fontSize: 13, fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                "${exam.activeStudentsCount} Active Student(s)",
+                style: const TextStyle(color: Color(0xFF3FB950), fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ExamMonitorScreen(examId: exam.id),
+                    ),
+                  ).then((_) => _loadExams());
+                },
+                icon: const Icon(Icons.monitor, size: 16, color: Colors.white),
+                label: const Text("Monitor", style: TextStyle(color: Colors.white)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1F6FEB),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                ),
+              ),
+            ],
+          )
+        ],
+      ),
+    );
+  }
+}
+
+class CreateExamDialog extends StatefulWidget {
+  const CreateExamDialog({super.key});
+
+  @override
+  State<CreateExamDialog> createState() => _CreateExamDialogState();
+}
+
+class _CreateExamDialogState extends State<CreateExamDialog> {
+  final titleController = TextEditingController();
+  DateTime startTime = DateTime.now().add(const Duration(minutes: 5));
+  DateTime endTime = DateTime.now().add(const Duration(hours: 2));
+  String allowedBrowser = "Google Chrome";
+  bool isSubmitting = false;
+  String? error;
+
+  final List<String> browserOptions = [
+    "Google Chrome",
+    "Microsoft Edge",
+    "Mozilla Firefox",
+    "Brave",
+    "Safari"
+  ];
+
+  Future<void> _submit() async {
+    if (titleController.text.trim().isEmpty) {
+      setState(() => error = "Title cannot be empty");
+      return;
+    }
+
+    setState(() {
+      isSubmitting = true;
+      error = null;
+    });
+
+    try {
+      await ApiService.createExam(
+        title: titleController.text.trim(),
+        startTime: startTime,
+        endTime: endTime,
+        allowedBrowser: allowedBrowser,
+      );
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      setState(() {
+        isSubmitting = false;
+        error = e.toString().replaceAll('Exception: ', '');
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: const Color(0xFF161B22),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      title: const Text("Create Exam Session", style: TextStyle(color: Colors.white)),
+      content: SizedBox(
+        width: 440,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (error != null) ...[
+              Text(error!, style: const TextStyle(color: Color(0xFFF85149))),
+              const SizedBox(height: 12),
+            ],
+            TextField(
+              controller: titleController,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: "Exam Title",
+                labelStyle: TextStyle(color: Color(0xFF8B949E)),
+                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF30363D))),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text("Allowed Browser:", style: TextStyle(color: Color(0xFF8B949E), fontSize: 13)),
+            DropdownButton<String>(
+              value: allowedBrowser,
+              dropdownColor: const Color(0xFF161B22),
+              isExpanded: true,
+              style: const TextStyle(color: Colors.white),
+              items: browserOptions.map((b) {
+                return DropdownMenuItem(value: b, child: Text(b));
+              }).toList(),
+              onChanged: (val) {
+                if (val != null) setState(() => allowedBrowser = val);
+              },
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text("Duration (Hours):", style: TextStyle(color: Color(0xFF8B949E), fontSize: 13)),
+                      Slider(
+                        value: endTime.difference(startTime).inHours.toDouble().clamp(1.0, 6.0),
+                        min: 1,
+                        max: 6,
+                        divisions: 5,
+                        label: "${endTime.difference(startTime).inHours} Hours",
+                        onChanged: (val) {
+                          setState(() {
+                            endTime = startTime.add(Duration(hours: val.toInt()));
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            )
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text("Cancel", style: TextStyle(color: Color(0xFF8B949E))),
+        ),
+        ElevatedButton(
+          onPressed: isSubmitting ? null : _submit,
+          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF238636)),
+          child: const Text("Generate Exam Code", style: TextStyle(color: Colors.white)),
+        )
+      ],
+    );
+  }
+}
