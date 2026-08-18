@@ -20,20 +20,18 @@ kasim/
 │   ├── run.bat               # Automation script to activate venv & run FastAPI server
 │   └── requirements.txt      # Python dependencies
 │
-├── frontend/                 # Multi-App Frontend Workspace
-│   ├── lecturer/             # Flutter Web Application for Teachers
-│   │   ├── lib/              # Login, Dashboard, Exam Creation & Live Monitor
-│   │   ├── run.bat           # Launch Web App on Chrome
-│   │   └── pubspec.yaml      # Flutter Web configuration
-│   │
-│   └── student/              # Flutter Windows Desktop Client for Students
-│       ├── lib/              # Student auth, Exam Code entry, Active Lockdown UI
-│       ├── run.bat           # Launch Windows desktop app
-│       ├── build_release.bat # Build release executable script
-│       ├── installer_setup.iss # Inno Setup installer builder script
-│       └── pubspec.yaml      # Flutter Desktop configuration
+├── lecturer/                 # Flutter Web Application for Teachers
+│   ├── lib/                  # Login, Dashboard, Exam Creation & Live Monitor
+│   ├── run.bat               # Launch Web App
+│   └── pubspec.yaml          # Flutter Web configuration
 │
-├── legacy-rust/              # Preserved legacy implementations
+├── student/                  # Flutter Windows Desktop Client for Students
+│   ├── lib/                  # Student auth, Exam Code entry, Active Lockdown UI
+│   ├── run.bat               # Launch Windows desktop app
+│   ├── build_release.bat     # Build release executable script
+│   ├── installer_setup.iss   # Inno Setup installer builder script
+│   └── pubspec.yaml          # Flutter Desktop configuration
+│
 ├── docs/
 │   ├── ARCHITECTURE.md       # Complete system architecture documentation
 │   └── DEPLOYMENT_GUIDE.md   # Production build & student deployment guide

@@ -33,7 +33,7 @@ kasim/
 To build the release-ready Windows executable:
 
 ```powershell
-cd frontend/student
+cd student
 flutter build windows --release
 ```
 *Alternatively, double-click `frontend/student/build_release.bat`.*
