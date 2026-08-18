@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+*.db
+*.sqlite3
+
+# Flutter / Dart
+.dart_tool/
+.build/
+build/
+.pub/
+.pub-cache/
+
+# OS generated
+.DS_Store
+Thumbs.db
