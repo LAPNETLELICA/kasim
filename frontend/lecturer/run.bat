@@ -6,6 +6,9 @@ echo ========================================================
 echo.
 
 cd /d "%~dp0"
-echo Launching Flutter Web App on Chrome (Port 3000)...
-flutter run -d chrome --web-port 3000
+echo Launching Flutter Web Server on Port 3000...
+echo Accessible on ANY browser at: http://localhost:3000
+echo.
+
+flutter run -d web-server --web-port 3000 --web-hostname 0.0.0.0
 pause
