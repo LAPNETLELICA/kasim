@@ -17,7 +17,7 @@ app = FastAPI(
 # CORS setup for Web Lecturer Dashboard and Windows Student Desktop App
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origin_regex=".*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -4,6 +4,7 @@ import '../models/exam.dart';
 
 class ApiService {
   static String baseUrl = 'http://localhost:8000/api';
+  static String fallbackBaseUrl = 'http://127.0.0.1:8000/api';
   static String? token;
 
   static void setToken(String newToken) {
@@ -15,15 +16,56 @@ class ApiService {
         if (token != null) 'Authorization': 'Bearer $token',
       };
 
+  static Future<http.Response> _postRequest(String path, Map<String, dynamic> body) async {
+    try {
+      return await http.post(
+        Uri.parse('$baseUrl$path'),
+        headers: _headers,
+        body: jsonEncode(body),
+      );
+    } catch (_) {
+      // Fallback to 127.0.0.1 if localhost DNS resolution fails
+      return await http.post(
+        Uri.parse('$fallbackBaseUrl$path'),
+        headers: _headers,
+        body: jsonEncode(body),
+      );
+    }
+  }
+
+  static Future<http.Response> _getRequest(String path) async {
+    try {
+      return await http.get(
+        Uri.parse('$baseUrl$path'),
+        headers: _headers,
+      );
+    } catch (_) {
+      return await http.get(
+        Uri.parse('$fallbackBaseUrl$path'),
+        headers: _headers,
+      );
+    }
+  }
+
+  static Future<http.Response> _patchRequest(String path) async {
+    try {
+      return await http.patch(
+        Uri.parse('$baseUrl$path'),
+        headers: _headers,
+      );
+    } catch (_) {
+      return await http.patch(
+        Uri.parse('$fallbackBaseUrl$path'),
+        headers: _headers,
+      );
+    }
+  }
+
   static Future<Map<String, dynamic>> login(String username, String password) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/auth/login'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'username': username,
-        'password': password,
-      }),
-    );
+    final response = await _postRequest('/auth/login', {
+      'username': username,
+      'password': password,
+    });
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
@@ -37,16 +79,12 @@ class ApiService {
 
   static Future<Map<String, dynamic>> register(
       String username, String email, String password) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/auth/register'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'username': username,
-        'email': email,
-        'password': password,
-        'role': 'lecturer',
-      }),
-    );
+    final response = await _postRequest('/auth/register', {
+      'username': username,
+      'email': email,
+      'password': password,
+      'role': 'lecturer',
+    });
 
     if (response.statusCode == 201) {
       return jsonDecode(response.body);
@@ -62,16 +100,12 @@ class ApiService {
     required DateTime endTime,
     required String allowedBrowser,
   }) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/exams/'),
-      headers: _headers,
-      body: jsonEncode({
-        'title': title,
-        'start_time': startTime.toUtc().toIso8601String(),
-        'end_time': endTime.toUtc().toIso8601String(),
-        'allowed_browser': allowedBrowser,
-      }),
-    );
+    final response = await _postRequest('/exams/', {
+      'title': title,
+      'start_time': startTime.toUtc().toIso8601String(),
+      'end_time': endTime.toUtc().toIso8601String(),
+      'allowed_browser': allowedBrowser,
+    });
 
     if (response.statusCode == 201) {
       return ExamSession.fromJson(jsonDecode(response.body));
@@ -82,10 +116,7 @@ class ApiService {
   }
 
   static Future<List<ExamSession>> fetchExams() async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/exams/'),
-      headers: _headers,
-    );
+    final response = await _getRequest('/exams/');
 
     if (response.statusCode == 200) {
       List data = jsonDecode(response.body);
@@ -96,10 +127,7 @@ class ApiService {
   }
 
   static Future<ExamSession> fetchExamDetail(String examId) async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/exams/$examId'),
-      headers: _headers,
-    );
+    final response = await _getRequest('/exams/$examId');
 
     if (response.statusCode == 200) {
       return ExamSession.fromJson(jsonDecode(response.body));
@@ -109,10 +137,7 @@ class ApiService {
   }
 
   static Future<ExamSession> toggleExamStatus(String examId) async {
-    final response = await http.patch(
-      Uri.parse('$baseUrl/exams/$examId/toggle'),
-      headers: _headers,
-    );
+    final response = await _patchRequest('/exams/$examId/toggle');
 
     if (response.statusCode == 200) {
       return ExamSession.fromJson(jsonDecode(response.body));

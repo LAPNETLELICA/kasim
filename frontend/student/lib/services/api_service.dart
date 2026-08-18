@@ -4,6 +4,7 @@ import '../models/student_session.dart';
 
 class StudentApiService {
   static String baseUrl = 'http://localhost:8000/api';
+  static String fallbackBaseUrl = 'http://127.0.0.1:8000/api';
   static String? token;
 
   static Map<String, String> get _headers => {
@@ -11,15 +12,27 @@ class StudentApiService {
         if (token != null) 'Authorization': 'Bearer $token',
       };
 
+  static Future<http.Response> _postRequest(String path, Map<String, dynamic> body) async {
+    try {
+      return await http.post(
+        Uri.parse('$baseUrl$path'),
+        headers: _headers,
+        body: jsonEncode(body),
+      );
+    } catch (_) {
+      return await http.post(
+        Uri.parse('$fallbackBaseUrl$path'),
+        headers: _headers,
+        body: jsonEncode(body),
+      );
+    }
+  }
+
   static Future<Map<String, dynamic>> login(String username, String password) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/auth/login'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'username': username,
-        'password': password,
-      }),
-    );
+    final response = await _postRequest('/auth/login', {
+      'username': username,
+      'password': password,
+    });
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
@@ -33,16 +46,12 @@ class StudentApiService {
 
   static Future<Map<String, dynamic>> register(
       String username, String email, String password) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/auth/register'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'username': username,
-        'email': email,
-        'password': password,
-        'role': 'student',
-      }),
-    );
+    final response = await _postRequest('/auth/register', {
+      'username': username,
+      'email': email,
+      'password': password,
+      'role': 'student',
+    });
 
     if (response.statusCode == 201) {
       return jsonDecode(response.body);
@@ -53,11 +62,7 @@ class StudentApiService {
   }
 
   static Future<LockdownRules> verifyExamCode(String code) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/sessions/verify-code'),
-      headers: _headers,
-      body: jsonEncode({'exam_code': code}),
-    );
+    final response = await _postRequest('/sessions/verify-code', {'exam_code': code});
 
     if (response.statusCode == 200) {
       return LockdownRules.fromJson(jsonDecode(response.body));
@@ -67,14 +72,10 @@ class StudentApiService {
   }
 
   static Future<ActiveStudentSession> joinExamSession(String code) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/sessions/join'),
-      headers: _headers,
-      body: jsonEncode({
-        'exam_code': code,
-        'device_info': 'Kasim Desktop Lockdown Client (Windows 11)',
-      }),
-    );
+    final response = await _postRequest('/sessions/join', {
+      'exam_code': code,
+      'device_info': 'Kasim Desktop Lockdown Client (Windows 11)',
+    });
 
     if (response.statusCode == 200) {
       return ActiveStudentSession.fromJson(jsonDecode(response.body));
@@ -86,14 +87,10 @@ class StudentApiService {
 
   static Future<Map<String, dynamic>> sendHeartbeat(
       String sessionId, String? runningBrowser) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/sessions/heartbeat'),
-      headers: _headers,
-      body: jsonEncode({
-        'session_id': sessionId,
-        'current_running_browser': runningBrowser,
-      }),
-    );
+    final response = await _postRequest('/sessions/heartbeat', {
+      'session_id': sessionId,
+      'current_running_browser': runningBrowser,
+    });
 
     if (response.statusCode == 200) {
       return jsonDecode(response.body);
@@ -103,9 +100,16 @@ class StudentApiService {
   }
 
   static Future<void> leaveSession(String sessionId) async {
-    await http.post(
-      Uri.parse('$baseUrl/sessions/leave?session_id=$sessionId'),
-      headers: _headers,
-    );
+    try {
+      await http.post(
+        Uri.parse('$baseUrl/sessions/leave?session_id=$sessionId'),
+        headers: _headers,
+      );
+    } catch (_) {
+      await http.post(
+        Uri.parse('$fallbackBaseUrl/sessions/leave?session_id=$sessionId'),
+        headers: _headers,
+      );
+    }
   }
 }
