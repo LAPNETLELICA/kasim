@@ -17,34 +17,26 @@ kasim/
 │   │       ├── auth.py       # User registration, login, JWT token auth
 │   │       ├── exams.py      # Exam session creation & unique code generation
 │   │       └── sessions.py   # Code verification, join, heartbeat & lockdown rules
-│   ├── .env.example          # Environment variables template
+│   ├── run.bat               # Automation script to activate venv & run FastAPI server
 │   └── requirements.txt      # Python dependencies
 │
-├── lecturer/                 # Flutter Web Application for Teachers
-│   ├── lib/
-│   │   ├── main.dart         # Entry point & theme configuration
-│   │   ├── models/           # Exam session data models
-│   │   ├── services/         # API HTTP communication client
-│   │   └── screens/          # Login, Dashboard, Exam Creation & Live Monitor
-│   ├── web/                  # Web HTML assets
-│   └── pubspec.yaml          # Flutter Web configuration
-│
-├── student/                  # Flutter Windows Desktop Application for Students
-│   ├── lib/
-│   │   ├── main.dart         # Entry point & Windows configuration
-│   │   ├── models/           # Lockdown rules & session models
-│   │   ├── services/         # API client & Windows process monitor
-│   │   └── screens/          # Student auth, Exam Code entry, Active Lockdown UI
-│   ├── windows/              # Windows C++ runner files
-│   └── pubspec.yaml          # Flutter Desktop configuration
+├── frontend/                 # Multi-App Frontend Workspace
+│   ├── lecturer/             # Flutter Web Application for Teachers
+│   │   ├── lib/              # Login, Dashboard, Exam Creation & Live Monitor
+│   │   ├── run.bat           # Launch Web App on Chrome
+│   │   └── pubspec.yaml      # Flutter Web configuration
+│   │
+│   └── student/              # Flutter Windows Desktop Client for Students
+│       ├── lib/              # Student auth, Exam Code entry, Active Lockdown UI
+│       ├── run.bat           # Launch Windows desktop app
+│       ├── build_release.bat # Build release executable script
+│       ├── installer_setup.iss # Inno Setup installer builder script
+│       └── pubspec.yaml      # Flutter Desktop configuration
 │
 ├── legacy-rust/              # Preserved legacy implementations
-│   ├── agent/
-│   ├── lib/
-│   └── docs/
-│
-└── docs/
-    └── ARCHITECTURE.md       # Complete system architecture documentation
+├── docs/
+│   ├── ARCHITECTURE.md       # Complete system architecture documentation
+│   └── DEPLOYMENT_GUIDE.md   # Production build & student deployment guide
 ```
 
 ---
