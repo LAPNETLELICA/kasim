@@ -1,20 +1,12 @@
 import 'package:flutter/material.dart';
-import 'screens/student_login_screen.dart';
 import 'screens/exam_entry_screen.dart';
 
 void main() {
   runApp(const KasimStudentApp());
 }
 
-class KasimStudentApp extends StatefulWidget {
+class KasimStudentApp extends StatelessWidget {
   const KasimStudentApp({super.key});
-
-  @override
-  State<KasimStudentApp> createState() => _KasimStudentAppState();
-}
-
-class _KasimStudentAppState extends State<KasimStudentApp> {
-  bool isAuthenticated = false;
 
   @override
   Widget build(BuildContext context) {
@@ -31,21 +23,7 @@ class _KasimStudentAppState extends State<KasimStudentApp> {
           surface: Color(0xFF131B2A),
         ),
       ),
-      home: isAuthenticated
-          ? ExamEntryScreen(
-              onLogout: () {
-                setState(() {
-                  isAuthenticated = false;
-                });
-              },
-            )
-          : StudentLoginScreen(
-              onLoginSuccess: () {
-                setState(() {
-                  isAuthenticated = true;
-                });
-              },
-            ),
+      home: const ExamEntryScreen(),
     );
   }
 }

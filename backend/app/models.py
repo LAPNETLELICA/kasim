@@ -1,8 +1,12 @@
-import datetime
+from datetime import datetime, timezone
 import uuid
 from sqlalchemy import Column, String, DateTime, Boolean, ForeignKey, Integer, Text
 from sqlalchemy.orm import relationship
 from app.database import Base
+
+
+def utc_now():
+    return datetime.now(timezone.utc)
 
 
 class User(Base):
@@ -13,7 +17,7 @@ class User(Base):
     email = Column(String, unique=True, nullable=False, index=True)
     hashed_password = Column(String, nullable=False)
     role = Column(String, nullable=False, default="student")  # "lecturer" or "student"
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     # Relationships
     created_exams = relationship("ExamSession", back_populates="lecturer", cascade="all, delete-orphan")
@@ -25,13 +29,15 @@ class ExamSession(Base):
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     title = Column(String, nullable=False)
-    start_time = Column(DateTime, nullable=False)
-    end_time = Column(DateTime, nullable=False)
+    duration_minutes = Column(Integer, nullable=False, default=60)
+    status = Column(String, nullable=False, default="waiting")  # "waiting", "active", "completed"
+    start_time = Column(DateTime, nullable=True)
+    end_time = Column(DateTime, nullable=True)
     allowed_browser = Column(String, nullable=False, default="Google Chrome")  # "Google Chrome", "Microsoft Edge", "Mozilla Firefox", "Brave"
     exam_code = Column(String(6), unique=True, nullable=False, index=True)
     is_active = Column(Boolean, default=True)
     lecturer_id = Column(String, ForeignKey("users.id"), nullable=False)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     # Relationships
     lecturer = relationship("User", back_populates="created_exams")
@@ -43,11 +49,13 @@ class StudentSession(Base):
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     exam_session_id = Column(String, ForeignKey("exam_sessions.id"), nullable=False)
-    student_id = Column(String, ForeignKey("users.id"), nullable=False)
-    joined_at = Column(DateTime, default=datetime.datetime.utcnow)
-    status = Column(String, default="active")  # "active", "completed", "terminated"
+    student_name = Column(String, nullable=False)
+    student_id = Column(String, ForeignKey("users.id"), nullable=True)
+    joined_at = Column(DateTime, default=utc_now)
+    status = Column(String, default="waiting")  # "waiting", "active", "completed", "terminated"
     device_info = Column(Text, nullable=True)
-    last_heartbeat = Column(DateTime, default=datetime.datetime.utcnow)
+    browser_compliant = Column(Boolean, default=True)
+    last_heartbeat = Column(DateTime, default=utc_now)
 
     # Relationships
     exam_session = relationship("ExamSession", back_populates="student_sessions")

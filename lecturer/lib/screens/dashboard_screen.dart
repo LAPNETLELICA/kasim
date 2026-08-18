@@ -42,6 +42,48 @@ class _DashboardScreenState extends State<DashboardScreen> {
     ).then((_) => _loadExams());
   }
 
+  Widget _buildStatusBadge(ExamSession exam) {
+    Color bg;
+    Color border;
+    Color text;
+    String label;
+
+    if (!exam.isActive) {
+      bg = Colors.red.withAlpha(40);
+      border = Colors.red;
+      text = Colors.red;
+      label = "DEACTIVATED";
+    } else if (exam.status == "waiting") {
+      bg = Colors.amber.withAlpha(30);
+      border = Colors.amber;
+      text = Colors.amber;
+      label = "LOBBY (WAITING)";
+    } else if (exam.status == "active") {
+      bg = const Color(0xFF238636).withAlpha(40);
+      border = const Color(0xFF3FB950);
+      text = const Color(0xFF3FB950);
+      label = "ACTIVE (IN PROGRESS)";
+    } else {
+      bg = Colors.blueGrey.withAlpha(40);
+      border = Colors.blueGrey;
+      text = Colors.blueGrey.shade200;
+      label = "CONCLUDED";
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: border),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: text),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -92,7 +134,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                     SizedBox(height: 4),
                     Text(
-                      "Create and monitor locked browser exam sessions",
+                      "Create, launch, monitor and view attendance for locked exam sessions",
                       style: TextStyle(color: Color(0xFF8B949E)),
                     ),
                   ],
@@ -145,7 +187,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           const SizedBox(height: 8),
           const Text(
-            "Click 'New Exam Session' to create a session with an allowed browser policy.",
+            "Click 'New Exam Session' to create a session code with custom duration and browser rules.",
             style: TextStyle(color: Color(0xFF8B949E)),
           ),
         ],
@@ -166,11 +208,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             decoration: BoxDecoration(
               color: const Color(0xFF0D1117),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFF58A6FF).withOpacity(0.3)),
+              border: Border.all(color: const Color(0xFF58A6FF).withAlpha(80)),
             ),
             child: Column(
               children: [
@@ -204,24 +246,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: exam.isActive ? const Color(0xFF1F6FEB).withOpacity(0.2) : Colors.grey.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: exam.isActive ? const Color(0xFF58A6FF) : Colors.grey,
-                        ),
-                      ),
-                      child: Text(
-                        exam.isActive ? "ACTIVE" : "INACTIVE",
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: exam.isActive ? const Color(0xFF58A6FF) : Colors.grey,
-                        ),
-                      ),
-                    ),
+                    _buildStatusBadge(exam),
                   ],
                 ),
                 const SizedBox(height: 8),
@@ -230,7 +255,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     const Icon(Icons.timer_outlined, size: 16, color: Color(0xFF8B949E)),
                     const SizedBox(width: 6),
                     Text(
-                      "${dateFormat.format(exam.startTime.toLocal())} → ${dateFormat.format(exam.endTime.toLocal())}",
+                      exam.startTime != null && exam.endTime != null
+                          ? "${dateFormat.format(exam.startTime!.toLocal())} → ${dateFormat.format(exam.endTime!.toLocal())}"
+                          : "Duration: ${exam.durationMinutes} Minutes (Waiting to Launch)",
                       style: const TextStyle(color: Color(0xFF8B949E), fontSize: 13),
                     ),
                     const SizedBox(width: 20),
@@ -249,8 +276,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                "${exam.activeStudentsCount} Active Student(s)",
-                style: const TextStyle(color: Color(0xFF3FB950), fontWeight: FontWeight.bold),
+                "${exam.totalJoinedCount} Student(s) Joined",
+                style: const TextStyle(color: Color(0xFF58A6FF), fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                "${exam.activeStudentsCount} Currently Active",
+                style: const TextStyle(color: Color(0xFF3FB950), fontSize: 12),
               ),
               const SizedBox(height: 8),
               ElevatedButton.icon(
@@ -263,9 +295,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ).then((_) => _loadExams());
                 },
                 icon: const Icon(Icons.monitor, size: 16, color: Colors.white),
-                label: const Text("Monitor", style: TextStyle(color: Colors.white)),
+                label: Text(
+                  exam.status == "waiting" ? "Launch & Monitor" : "Monitor Session",
+                  style: const TextStyle(color: Colors.white),
+                ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF1F6FEB),
+                  backgroundColor: exam.status == "waiting"
+                      ? const Color(0xFF238636)
+                      : const Color(0xFF1F6FEB),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                 ),
               ),
@@ -316,10 +353,8 @@ class _CreateExamDialogState extends State<CreateExamDialog> {
     });
 
     try {
-      final now = DateTime.now();
       await ApiService.createExam(
         title: titleController.text.trim(),
-        startTime: now,
         durationMinutes: durationMins,
         allowedBrowser: allowedBrowser,
       );
@@ -373,7 +408,7 @@ class _CreateExamDialogState extends State<CreateExamDialog> {
               ),
             ),
             const SizedBox(height: 16),
-            const Text("Allowed Browser:", style: TextStyle(color: Color(0xFF8B949E), fontSize: 13)),
+            const Text("Allowed Browser Policy:", style: TextStyle(color: Color(0xFF8B949E), fontSize: 13)),
             DropdownButton<String>(
               value: allowedBrowser,
               dropdownColor: const Color(0xFF161B22),
@@ -385,6 +420,19 @@ class _CreateExamDialogState extends State<CreateExamDialog> {
               onChanged: (val) {
                 if (val != null) setState(() => allowedBrowser = val);
               },
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0D1117),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: const Color(0xFF30363D)),
+              ),
+              child: const Text(
+                "Note: Session will be created in a waiting lobby. Students can join with the generated code. Once you click 'Start Session', late joiners are blocked.",
+                style: TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+              ),
             ),
           ],
         ),

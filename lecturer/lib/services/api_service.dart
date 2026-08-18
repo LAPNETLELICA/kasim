@@ -96,18 +96,14 @@ class ApiService {
 
   static Future<ExamSession> createExam({
     required String title,
-    DateTime? startTime,
-    DateTime? endTime,
-    int? durationMinutes,
+    required int durationMinutes,
     required String allowedBrowser,
   }) async {
     final body = <String, dynamic>{
       'title': title,
+      'duration_minutes': durationMinutes,
       'allowed_browser': allowedBrowser,
     };
-    if (startTime != null) body['start_time'] = startTime.toUtc().toIso8601String();
-    if (endTime != null) body['end_time'] = endTime.toUtc().toIso8601String();
-    if (durationMinutes != null) body['duration_minutes'] = durationMinutes;
 
     final response = await _postRequest('/exams/', body);
 
@@ -137,6 +133,38 @@ class ApiService {
       return ExamSession.fromJson(jsonDecode(response.body));
     } else {
       throw Exception('Failed to load exam details');
+    }
+  }
+
+  static Future<ExamSession> startExam(String examId) async {
+    final response = await _postRequest('/exams/$examId/start', {});
+
+    if (response.statusCode == 200) {
+      return ExamSession.fromJson(jsonDecode(response.body));
+    } else {
+      final error = jsonDecode(response.body);
+      throw Exception(error['detail'] ?? 'Failed to start exam session');
+    }
+  }
+
+  static Future<ExamSession> stopExam(String examId) async {
+    final response = await _postRequest('/exams/$examId/stop', {});
+
+    if (response.statusCode == 200) {
+      return ExamSession.fromJson(jsonDecode(response.body));
+    } else {
+      final error = jsonDecode(response.body);
+      throw Exception(error['detail'] ?? 'Failed to stop exam session');
+    }
+  }
+
+  static Future<AttendanceSummary> fetchExamAttendance(String examId) async {
+    final response = await _getRequest('/exams/$examId/attendance');
+
+    if (response.statusCode == 200) {
+      return AttendanceSummary.fromJson(jsonDecode(response.body));
+    } else {
+      throw Exception('Failed to load attendance report');
     }
   }
 

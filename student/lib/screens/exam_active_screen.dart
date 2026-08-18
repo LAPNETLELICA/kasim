@@ -5,7 +5,12 @@ import '../services/api_service.dart';
 
 class ExamActiveScreen extends StatefulWidget {
   final ActiveStudentSession session;
-  const ExamActiveScreen({super.key, required this.session});
+  final int initialRemainingSeconds;
+  const ExamActiveScreen({
+    super.key,
+    required this.session,
+    this.initialRemainingSeconds = 0,
+  });
 
   @override
   State<ExamActiveScreen> createState() => _ExamActiveScreenState();
@@ -14,17 +19,27 @@ class ExamActiveScreen extends StatefulWidget {
 class _ExamActiveScreenState extends State<ExamActiveScreen> {
   late LockdownService lockdownService;
   bool isCompliant = true;
-  String statusMessage = "Lockdown active";
+  String statusMessage = "Lockdown active and compliant.";
   int remainingSeconds = 0;
   bool isExpired = false;
 
   @override
   void initState() {
     super.initState();
-    remainingSeconds = widget.session.endTime.difference(DateTime.now().toUtc()).inSeconds;
+    
+    // Set initial remaining seconds
+    if (widget.initialRemainingSeconds > 0) {
+      remainingSeconds = widget.initialRemainingSeconds;
+    } else if (widget.session.endTime != null) {
+      final diff = widget.session.endTime!.toUtc().difference(DateTime.now().toUtc()).inSeconds;
+      remainingSeconds = diff > 0 ? diff : (widget.session.durationMinutes * 60);
+    } else {
+      remainingSeconds = widget.session.durationMinutes * 60;
+    }
     
     lockdownService = LockdownService(
       session: widget.session,
+      initialRemainingSeconds: remainingSeconds,
       onStatusUpdate: (compliant, msg, seconds) {
         if (mounted) {
           setState(() {
@@ -38,7 +53,8 @@ class _ExamActiveScreenState extends State<ExamActiveScreen> {
         if (mounted) {
           setState(() {
             isExpired = true;
-            statusMessage = "EXAM WINDOW EXPIRED: Lockdown restrictions automatically lifted.";
+            statusMessage = "EXAM SESSION COMPLETED: Desktop lockdown automatically released.";
+            remainingSeconds = 0;
           });
         }
       },
@@ -68,19 +84,24 @@ class _ExamActiveScreenState extends State<ExamActiveScreen> {
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF131B2A),
         title: const Text("Exit Exam Session?", style: TextStyle(color: Colors.white)),
-        content: const Text(
-          "Are you sure you want to finish and submit your exam session? Desktop lockdown will be released.",
-          style: TextStyle(color: Color(0xFF94A3B8)),
+        content: Text(
+          isExpired
+              ? "Close the exam client and return to the main screen?"
+              : "Are you sure you want to finish and submit your exam session? Desktop lockdown will be released.",
+          style: const TextStyle(color: Color(0xFF94A3B8)),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text("Continue Exam", style: TextStyle(color: Color(0xFF94A3B8))),
-          ),
+          if (!isExpired)
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text("Continue Exam", style: TextStyle(color: Color(0xFF94A3B8))),
+            ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444)),
-            child: const Text("Submit & Exit", style: TextStyle(color: Colors.white)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: isExpired ? const Color(0xFF0284C7) : const Color(0xFFEF4444),
+            ),
+            child: Text(isExpired ? "Close App" : "Submit & Exit", style: const TextStyle(color: Colors.white)),
           )
         ],
       ),
@@ -97,6 +118,8 @@ class _ExamActiveScreenState extends State<ExamActiveScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isLowTime = remainingSeconds > 0 && remainingSeconds < 300;
+
     return Scaffold(
       backgroundColor: const Color(0xFF090D16),
       body: SafeArea(
@@ -112,8 +135,10 @@ class _ExamActiveScreenState extends State<ExamActiveScreen> {
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
                     color: isExpired
-                        ? Colors.grey
-                        : (isCompliant ? const Color(0xFF16A34A) : const Color(0xFFEF4444)),
+                        ? const Color(0xFF64748B)
+                        : (isCompliant
+                            ? (isLowTime ? const Color(0xFFF59E0B) : const Color(0xFF16A34A))
+                            : const Color(0xFFEF4444)),
                     width: 2,
                   ),
                 ),
@@ -125,26 +150,56 @@ class _ExamActiveScreenState extends State<ExamActiveScreen> {
                       children: [
                         Text(
                           widget.session.examTitle,
-                          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
+                          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          "Allowed Browser: ${widget.session.allowedBrowser}",
-                          style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.w600),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF0284C7).withAlpha(40),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: const Color(0xFF0284C7)),
+                              ),
+                              child: Text(
+                                "Candidate: ${widget.session.studentName}",
+                                style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF16A34A).withAlpha(40),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: const Color(0xFF16A34A)),
+                              ),
+                              child: Text(
+                                "Allowed: ${widget.session.allowedBrowser}",
+                                style: const TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.bold, fontSize: 13),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        const Text("TIME REMAINING", style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, letterSpacing: 1.5)),
+                        const Text(
+                          "TIME REMAINING",
+                          style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, letterSpacing: 1.5, fontWeight: FontWeight.bold),
+                        ),
                         const SizedBox(height: 4),
                         Text(
                           _formatDuration(remainingSeconds),
                           style: TextStyle(
-                            fontSize: 32,
+                            fontSize: 36,
                             fontWeight: FontWeight.bold,
-                            color: remainingSeconds < 300 ? const Color(0xFFEF4444) : const Color(0xFF38BDF8),
+                            color: isExpired
+                                ? const Color(0xFF64748B)
+                                : (isLowTime ? const Color(0xFFEF4444) : const Color(0xFF38BDF8)),
                             fontFamily: 'monospace',
                           ),
                         ),
@@ -153,30 +208,40 @@ class _ExamActiveScreenState extends State<ExamActiveScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
               // Security Policy Status Card
               Container(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
-                  color: isCompliant ? const Color(0xFF052E16) : const Color(0xFF450A0A),
+                  color: isExpired
+                      ? const Color(0xFF1E293B)
+                      : (isCompliant ? const Color(0xFF052E16) : const Color(0xFF450A0A)),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: isCompliant ? const Color(0xFF16A34A) : const Color(0xFFEF4444),
+                    color: isExpired
+                        ? const Color(0xFF475569)
+                        : (isCompliant ? const Color(0xFF16A34A) : const Color(0xFFEF4444)),
                   ),
                 ),
                 child: Row(
                   children: [
                     Icon(
-                      isCompliant ? Icons.verified_user : Icons.warning_amber_rounded,
-                      color: isCompliant ? const Color(0xFF4ADE80) : const Color(0xFFFCA5A5),
-                      size: 32,
+                      isExpired
+                          ? Icons.lock_open
+                          : (isCompliant ? Icons.verified_user : Icons.warning_amber_rounded),
+                      color: isExpired
+                          ? const Color(0xFF94A3B8)
+                          : (isCompliant ? const Color(0xFF4ADE80) : const Color(0xFFFCA5A5)),
+                      size: 30,
                     ),
-                    const SizedBox(width: 16),
+                    const SizedBox(width: 14),
                     Expanded(
                       child: Text(
                         statusMessage,
                         style: TextStyle(
-                          color: isCompliant ? const Color(0xFFDCFCE7) : const Color(0xFFFEE2E2),
+                          color: isExpired
+                              ? const Color(0xFFE2E8F0)
+                              : (isCompliant ? const Color(0xFFDCFCE7) : const Color(0xFFFEE2E2)),
                           fontSize: 14,
                           fontWeight: FontWeight.bold,
                         ),
@@ -185,21 +250,34 @@ class _ExamActiveScreenState extends State<ExamActiveScreen> {
                   ],
                 ),
               ),
-              const Expanded(
+              Expanded(
                 child: Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.lock, size: 80, color: Color(0xFF1E293B)),
-                      SizedBox(height: 16),
-                      Text(
-                        "Exam In Progress - Desktop Lockdown Active",
-                        style: TextStyle(fontSize: 18, color: Color(0xFF94A3B8)),
+                      Icon(
+                        isExpired ? Icons.check_circle_outline : Icons.security,
+                        size: 72,
+                        color: isExpired ? const Color(0xFF22C55E) : const Color(0xFF0284C7),
                       ),
-                      SizedBox(height: 8),
+                      const SizedBox(height: 16),
                       Text(
-                        "Open your designated browser to take the exam. Your activity is monitored.",
-                        style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
+                        isExpired
+                            ? "Exam Concluded - Response Recorded"
+                            : "Exam In Progress - Desktop Lockdown Active",
+                        style: TextStyle(
+                          fontSize: 20,
+                          color: isExpired ? Colors.white : const Color(0xFFE2E8F0),
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        isExpired
+                            ? "Thank you for completing the exam. You may safely exit the exam client."
+                            : "Use only your designated '${widget.session.allowedBrowser}' browser. Other applications are strictly restricted.",
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
                       ),
                     ],
                   ),
@@ -208,13 +286,13 @@ class _ExamActiveScreenState extends State<ExamActiveScreen> {
               // Exit Button
               ElevatedButton.icon(
                 onPressed: _exitExam,
-                icon: const Icon(Icons.exit_to_app, color: Colors.white),
+                icon: Icon(isExpired ? Icons.check : Icons.exit_to_app, color: Colors.white),
                 label: Text(
                   isExpired ? "Exit Exam Client" : "Finish & Submit Exam",
                   style: const TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold),
                 ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: isExpired ? const Color(0xFF2563EB) : const Color(0xFFDC2626),
+                  backgroundColor: isExpired ? const Color(0xFF0284C7) : const Color(0xFFDC2626),
                   padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 18),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
