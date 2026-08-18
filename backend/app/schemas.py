@@ -38,11 +38,11 @@ class LoginRequest(BaseModel):
     password: str
 
 
-# --- Exam Session Schemas ---
 class ExamSessionCreate(BaseModel):
     title: str = Field(..., min_length=3, max_length=100)
-    start_time: datetime
-    end_time: datetime
+    start_time: Optional[datetime] = None
+    end_time: Optional[datetime] = None
+    duration_minutes: Optional[int] = Field(default=None, description="Dynamic duration of the exam in minutes")
     allowed_browser: str = Field(default="Google Chrome", description="Target allowed browser e.g. Google Chrome, Microsoft Edge")
 
 

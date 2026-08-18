@@ -96,16 +96,20 @@ class ApiService {
 
   static Future<ExamSession> createExam({
     required String title,
-    required DateTime startTime,
-    required DateTime endTime,
+    DateTime? startTime,
+    DateTime? endTime,
+    int? durationMinutes,
     required String allowedBrowser,
   }) async {
-    final response = await _postRequest('/exams/', {
+    final body = <String, dynamic>{
       'title': title,
-      'start_time': startTime.toUtc().toIso8601String(),
-      'end_time': endTime.toUtc().toIso8601String(),
       'allowed_browser': allowedBrowser,
-    });
+    };
+    if (startTime != null) body['start_time'] = startTime.toUtc().toIso8601String();
+    if (endTime != null) body['end_time'] = endTime.toUtc().toIso8601String();
+    if (durationMinutes != null) body['duration_minutes'] = durationMinutes;
+
+    final response = await _postRequest('/exams/', body);
 
     if (response.statusCode == 201) {
       return ExamSession.fromJson(jsonDecode(response.body));

@@ -286,8 +286,7 @@ class CreateExamDialog extends StatefulWidget {
 
 class _CreateExamDialogState extends State<CreateExamDialog> {
   final titleController = TextEditingController();
-  DateTime startTime = DateTime.now().add(const Duration(minutes: 5));
-  DateTime endTime = DateTime.now().add(const Duration(hours: 2));
+  final durationController = TextEditingController(text: "60");
   String allowedBrowser = "Google Chrome";
   bool isSubmitting = false;
   String? error;
@@ -306,16 +305,23 @@ class _CreateExamDialogState extends State<CreateExamDialog> {
       return;
     }
 
+    final durationMins = int.tryParse(durationController.text.trim());
+    if (durationMins == null || durationMins <= 0) {
+      setState(() => error = "Please enter a valid positive duration in minutes");
+      return;
+    }
+
     setState(() {
       isSubmitting = true;
       error = null;
     });
 
     try {
+      final now = DateTime.now();
       await ApiService.createExam(
         title: titleController.text.trim(),
-        startTime: startTime,
-        endTime: endTime,
+        startTime: now,
+        durationMinutes: durationMins,
         allowedBrowser: allowedBrowser,
       );
       if (mounted) Navigator.pop(context);
@@ -353,6 +359,21 @@ class _CreateExamDialogState extends State<CreateExamDialog> {
               ),
             ),
             const SizedBox(height: 16),
+            TextField(
+              controller: durationController,
+              keyboardType: TextInputType.number,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: "Exam Duration (Minutes)",
+                hintText: "e.g. 30, 60, 90, 120",
+                labelStyle: TextStyle(color: Color(0xFF8B949E)),
+                hintStyle: TextStyle(color: Color(0xFF484F58)),
+                suffixText: "mins",
+                suffixStyle: TextStyle(color: Color(0xFF58A6FF)),
+                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF30363D))),
+              ),
+            ),
+            const SizedBox(height: 16),
             const Text("Allowed Browser:", style: TextStyle(color: Color(0xFF8B949E), fontSize: 13)),
             DropdownButton<String>(
               value: allowedBrowser,
@@ -366,31 +387,6 @@ class _CreateExamDialogState extends State<CreateExamDialog> {
                 if (val != null) setState(() => allowedBrowser = val);
               },
             ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text("Duration (Hours):", style: TextStyle(color: Color(0xFF8B949E), fontSize: 13)),
-                      Slider(
-                        value: endTime.difference(startTime).inHours.toDouble().clamp(1.0, 6.0),
-                        min: 1,
-                        max: 6,
-                        divisions: 5,
-                        label: "${endTime.difference(startTime).inHours} Hours",
-                        onChanged: (val) {
-                          setState(() {
-                            endTime = startTime.add(Duration(hours: val.toInt()));
-                          });
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            )
           ],
         ),
       ),

@@ -67,7 +67,7 @@ class _StudentLoginScreenState extends State<StudentLoginScreen> {
             border: Border.all(color: const Color(0xFF212E46)),
             boxShadow: const [
               BoxShadow(
-                color: Colors.black80,
+                color: Color(0xCC000000),
                 blurRadius: 24,
                 offset: Offset(0, 12),
               )

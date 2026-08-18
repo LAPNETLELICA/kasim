@@ -1,5 +1,6 @@
 import random
 import string
+from datetime import datetime, timedelta
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -26,7 +27,16 @@ def create_exam_session(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(security.require_role("lecturer"))
 ):
-    if exam_in.start_time >= exam_in.end_time:
+    now = datetime.utcnow()
+    start_time = exam_in.start_time or now
+    if exam_in.duration_minutes and exam_in.duration_minutes > 0:
+        end_time = start_time + timedelta(minutes=exam_in.duration_minutes)
+    elif exam_in.end_time:
+        end_time = exam_in.end_time
+    else:
+        end_time = start_time + timedelta(minutes=60)
+
+    if start_time >= end_time:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Start time must be strictly earlier than end time"
@@ -36,8 +46,8 @@ def create_exam_session(
     
     exam = models.ExamSession(
         title=exam_in.title,
-        start_time=exam_in.start_time,
-        end_time=exam_in.end_time,
+        start_time=start_time,
+        end_time=end_time,
         allowed_browser=exam_in.allowed_browser,
         exam_code=unique_code,
         is_active=True,
