@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Literal
 from pydantic import BaseModel, EmailStr, Field
 
 
@@ -38,12 +38,23 @@ class LoginRequest(BaseModel):
     password: str
 
 
+ALLOWED_BROWSERS = Literal[
+    "Google Chrome",
+    "Microsoft Edge",
+    "Mozilla Firefox",
+    "Brave",
+]
+
+
 class ExamSessionCreate(BaseModel):
     title: str = Field(..., min_length=3, max_length=100)
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
-    duration_minutes: Optional[int] = Field(default=None, description="Dynamic duration of the exam in minutes")
-    allowed_browser: str = Field(default="Google Chrome", description="Target allowed browser e.g. Google Chrome, Microsoft Edge")
+    duration_minutes: Optional[int] = Field(default=None, ge=1, description="Duration of the exam in minutes (must be >= 1)")
+    allowed_browser: ALLOWED_BROWSERS = Field(
+        default="Google Chrome",
+        description="Allowed browser: Google Chrome, Microsoft Edge, Mozilla Firefox, or Brave"
+    )
 
 
 class ExamSessionResponse(BaseModel):

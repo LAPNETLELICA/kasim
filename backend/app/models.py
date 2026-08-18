@@ -27,7 +27,7 @@ class ExamSession(Base):
     title = Column(String, nullable=False)
     start_time = Column(DateTime, nullable=False)
     end_time = Column(DateTime, nullable=False)
-    allowed_browser = Column(String, nullable=False, default="Google Chrome")  # e.g., "Google Chrome", "Microsoft Edge"
+    allowed_browser = Column(String, nullable=False, default="Google Chrome")  # "Google Chrome", "Microsoft Edge", "Mozilla Firefox", "Brave"
     exam_code = Column(String(6), unique=True, nullable=False, index=True)
     is_active = Column(Boolean, default=True)
     lecturer_id = Column(String, ForeignKey("users.id"), nullable=False)

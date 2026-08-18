@@ -296,7 +296,6 @@ class _CreateExamDialogState extends State<CreateExamDialog> {
     "Microsoft Edge",
     "Mozilla Firefox",
     "Brave",
-    "Safari"
   ];
 
   Future<void> _submit() async {
