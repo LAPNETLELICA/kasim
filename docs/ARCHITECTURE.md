@@ -1,193 +1,162 @@
-# Kasim System Architecture & Operations Manual
+# Kasim System Architecture & Policy Engine Operations Manual
 
 ## 1. Overview & Repository Architecture
 
-Kasim is a secure exam management platform built with a modular, multi-folder structure. It features a centralized Python FastAPI backend integrated with PostgreSQL 18, a Flutter Web administration portal for lecturers, and a Flutter Windows Desktop Client for students with automated environment lockdown enforcement.
+Kasim is a policy-based access-control platform for student desktop environments controlled remotely by a lecturer through a web dashboard.
+
+The system uses a **Central Policy Engine** implementing a strict **Default-Deny Principle**:
+- Lecturers explicitly define authorized browsers, AI services, and Browser ↔ AI matrix combinations.
+- Anything not explicitly authorized is automatically denied on student devices.
 
 ```
 kasim/
-├── backend/                  # FastAPI Python Application (PostgreSQL 18)
+├── backend/                      # FastAPI Python Application (PostgreSQL 18)
 │   ├── app/
-│   │   ├── main.py           # FastAPI entry point, CORS & router inclusion
-│   │   ├── database.py       # PostgreSQL 18 SQLAlchemy connection pool
-│   │   ├── models.py         # DB models (User, ExamSession, StudentSession)
-│   │   ├── schemas.py        # Pydantic validation schemas
-│   │   ├── security.py       # JWT tokens & bcrypt password hashing
+│   │   ├── main.py               # FastAPI entry point, CORS & router inclusion
+│   │   ├── database.py           # PostgreSQL 18 SQLAlchemy connection pool
+│   │   ├── models.py             # DB models (User, ExamSession, AccessPolicy, Resource, AuditViolation)
+│   │   ├── schemas.py            # Pydantic validation schemas
+│   │   ├── security.py           # JWT tokens & bcrypt password hashing
+│   │   ├── policy_engine.py      # Core Default-Deny Matrix Engine & HMAC Signer
 │   │   └── routers/
-│   │       ├── auth.py       # User registration, login, JWT token auth
-│   │       ├── exams.py      # Exam session creation & unique code generation
-│   │       └── sessions.py   # Code verification, join, heartbeat & lockdown rules
-│   ├── run.bat               # Automation script to activate venv & run FastAPI server
-│   └── requirements.txt      # Python dependencies
+│   │       ├── auth.py           # User registration, login, JWT token auth
+│   │       ├── resources.py      # Dynamic Browser & AI Resource Registration CRUD
+│   │       ├── policies.py       # Policy creation, matrix validation, signatures
+│   │       ├── exams.py          # Exam session creation & policy linking
+│   │       ├── sessions.py       # Code verification, signed policy distribution, heartbeats
+│   │       └── audit.py          # Real-time violation logs & monitoring
+│   └── test_policy_engine.py    # Unit tests for Policy Engine matrix evaluation
 │
-├── lecturer/                 # Flutter Web Application for Teachers
-│   ├── lib/                  # Login, Dashboard, Exam Creation & Live Monitor
-│   ├── run.bat               # Launch Web App
-│   └── pubspec.yaml          # Flutter Web configuration
+├── lecturer/                     # Flutter Web Application for Lecturers
+│   ├── lib/
+│   │   ├── models/               # Resource, Policy, Audit & Exam models
+│   │   ├── widgets/              # MatrixBuilderWidget, PolicyPreviewDialog
+│   │   ├── screens/              # Dashboard, ResourceManager, LiveAuditMonitor, Login
+│   │   └── services/             # ApiService (REST HTTP Client)
 │
-├── student/                  # Flutter Windows Desktop Client for Students
-│   ├── lib/                  # Student auth, Exam Code entry, Active Lockdown UI
-│   ├── run.bat               # Launch Windows desktop app
-│   ├── build_release.bat     # Build release executable script
-│   ├── installer_setup.iss   # Inno Setup installer builder script
-│   └── pubspec.yaml          # Flutter Desktop configuration
+├── student/                      # Flutter Windows Desktop Client & Native Guard
+│   ├── lib/
+│   │   ├── models/               # StudentSession, LockdownRules models
+│   │   ├── services/             # LocalPolicyEngine, PolicyVerifier, BrowserPolicyGuard, LockdownService
+│   │   └── screens/              # Entry, Lobby, Active Policy Lockdown UI
+│   └── agent_service/            # Python Background Security Guard & Watchdog Supervisor
+│       ├── main.py               # Supervisor enforcement loop & violation reporter
+│       ├── process_monitor.py    # Process scanner & taskkill supervisor
+│       └── policy_cache.py       # Offline cryptographic policy storage verifier
 │
-├── docs/
-│   ├── ARCHITECTURE.md       # Complete system architecture documentation
-│   └── DEPLOYMENT_GUIDE.md   # Production build & student deployment guide
+└── docs/
+    └── ARCHITECTURE.md           # Architecture documentation
 ```
 
 ---
 
-## 2. System Architecture & Data Flow
+## 2. Policy Engine Architecture & Data Flow
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor Lecturer as Lecturer (Web App)
     participant Backend as FastAPI Backend (Port 8000)
-    participant DB as PostgreSQL 18 DB
+    participant DB as DB & Policy Registry
     actor Student as Student (Windows Desktop App)
 
-    Lecturer->>Backend: POST /api/auth/login
-    Backend-->>Lecturer: Return JWT Token
+    Lecturer->>Backend: POST /api/resources/browsers (Add Custom Browser e.g. Vivaldi)
+    Lecturer->>Backend: POST /api/resources/ai-services (Add Custom AI e.g. DeepSeek)
+    Lecturer->>Backend: POST /api/policies (Define Browser ↔ AI Matrix Rules)
+    Backend->>DB: Store AccessPolicy & Generate HMAC-SHA256 Signature
+    Backend-->>Lecturer: Policy Created & Signed
 
-    Lecturer->>Backend: POST /api/exams/ (Title, Start/End Time, Allowed Browser)
-    Backend->>DB: Store ExamSession & Generate Unique 6-Digit Code
-    Backend-->>Lecturer: Exam Created (Code: e.g. "X9K2P4")
+    Lecturer->>Backend: POST /api/exams/ (Attach Policy ID)
+    Backend->>DB: Store ExamSession (Code: e.g. "X9K2P4")
 
     Student->>Backend: POST /api/sessions/verify-code ("X9K2P4")
-    Backend->>DB: Query ExamSession & Check Time Window
-    Backend-->>Student: Return Lockdown Rules (Allowed Browser: "Google Chrome", Time Window)
+    Backend-->>Student: Return Signed Policy Payload (HMAC Signature, Version, Matrix)
+    Student->>Student: Verify HMAC Signature & Cache Policy Locally
 
-    Student->>Backend: POST /api/sessions/join
-    Backend->>DB: Create StudentSession (status="active")
-    Backend-->>Student: Confirm Session Joined
-
-    loop Heartbeat & Lockdown Monitoring (Every 10 Seconds)
-        Student->>Student: Inspect Windows Running Processes (tasklist)
-        Student->>Backend: POST /api/sessions/heartbeat (sessionId, runningBrowser)
-        Backend->>DB: Update last_heartbeat & verify expiry
-        Backend-->>Student: Heartbeat Response (is_exam_active, time_remaining_seconds)
+    loop Local Default-Deny & Process Guard (Every 1 Second)
+        Student->>Student: Inspect Executables & Browser Domain Access
+        alt Unauthorized Process or AI Domain Attempted
+            Student->>Student: Terminate Unauthorized Executable & Apply Registry Policy
+            Student->>Backend: POST /api/audit/violations (Dispatch Event Telemetry)
+        end
     end
-
-    note over Student,Backend: Once End Time is reached:
-    Backend-->>Student: Response (is_exam_active=false, time_remaining=0)
-    Student->>Student: Lockdown Automatically Released
 ```
 
 ---
 
-## 3. Database Schema (PostgreSQL 18)
+## 3. Database Schema
 
-### `users` Table
-- `id` (VARCHAR, PK, UUID): Unique user identifier.
-- `username` (VARCHAR, UNIQUE, INDEX): Login username.
-- `email` (VARCHAR, UNIQUE, INDEX): User email address.
-- `hashed_password` (VARCHAR): Bcrypt hashed password.
-- `role` (VARCHAR): User role (`lecturer` or `student`).
-- `created_at` (TIMESTAMP): Registration timestamp.
+### `browser_resources` Table
+- `id` (VARCHAR, PK): Unique browser resource identifier.
+- `name` (VARCHAR, UNIQUE): Display name (e.g. `Google Chrome`, `Vivaldi`).
+- `executables` (JSON): Executable binary names (e.g. `["chrome.exe", "google-chrome"]`).
+- `description` (TEXT): Description text.
+- `is_custom` (BOOLEAN): Flag indicating custom lecturer addition vs system default.
 
-### `exam_sessions` Table
-- `id` (VARCHAR, PK, UUID): Exam session identifier.
-- `title` (VARCHAR): Exam title.
-- `start_time` (TIMESTAMP): Scheduled start time (UTC).
-- `end_time` (TIMESTAMP): Scheduled end time (UTC).
-- `allowed_browser` (VARCHAR): Policy browser requirement (e.g. `Google Chrome`, `Microsoft Edge`).
-- `exam_code` (VARCHAR(6), UNIQUE, INDEX): 6-character uppercase alphanumeric exam code.
-- `is_active` (BOOLEAN): Master toggle status set by lecturer.
-- `lecturer_id` (VARCHAR, FK -> `users.id`): Creator lecturer reference.
-- `created_at` (TIMESTAMP): Creation timestamp.
+### `ai_resources` Table
+- `id` (VARCHAR, PK): Unique AI service resource identifier.
+- `name` (VARCHAR, UNIQUE): Display name (e.g. `Claude`, `ChatGPT`, `DeepSeek`).
+- `domains` (JSON): Hostnames (e.g. `["claude.ai", "api.anthropic.com"]`).
+- `desktop_executables` (JSON): Native app binary names (e.g. `["Claude.exe"]`).
 
-### `student_sessions` Table
-- `id` (VARCHAR, PK, UUID): Joined session identifier.
-- `exam_session_id` (VARCHAR, FK -> `exam_sessions.id`): Associated exam.
-- `student_id` (VARCHAR, FK -> `users.id`): Participating student.
-- `joined_at` (TIMESTAMP): Join timestamp.
-- `status` (VARCHAR): Status (`active`, `completed`, `terminated`).
-- `device_info` (TEXT): Client environment details.
-- `last_heartbeat` (TIMESTAMP): Most recent keepalive timestamp.
+### `access_policies` Table
+- `id` (VARCHAR, PK): Access policy identifier.
+- `title` (VARCHAR): Policy title.
+- `version` (INTEGER): Auto-incrementing version number.
+- `default_action` (VARCHAR): Default rule fallback (`DENY`).
+- `allowed_browsers` (JSON): List of authorized browser resource IDs.
+- `allowed_ai` (JSON): List of authorized AI service resource IDs.
+- `browser_ai_matrix` (JSON): Map of browser ID -> allowed AI service IDs.
+- `allowed_desktop_apps` (JSON): List of authorized desktop AI app binaries.
+- `signature` (VARCHAR): HMAC-SHA256 signature for tamper verification.
+
+### `audit_violations` Table
+- `id` (VARCHAR, PK): Violation record ID.
+- `exam_session_id` (VARCHAR, FK): Associated exam session.
+- `student_session_id` (VARCHAR, FK): Participating student session.
+- `student_name` (VARCHAR): Student display name.
+- `violation_type` (VARCHAR): Event classification (`UNAUTHORIZED_BROWSER`, `UNAUTHORIZED_AI_DOMAIN`).
+- `resource_name` (VARCHAR): Offending resource identifier.
+- `action_taken` (VARCHAR): Action executed (`BLOCKED`, `TERMINATED`).
+- `timestamp` (TIMESTAMP): UTC event timestamp.
 
 ---
 
-## 4. Browser Lockdown Enforcement & Expiration Lifecycle
+## 4. Default-Deny Rule Evaluation Matrix
 
-1. **Lecturer Session Initialization:**
-   - The lecturer logs into `lecturer/` web app, creates an exam specifying title, duration, and target allowed browser (e.g., Google Chrome).
-   - The system generates a unique **Exam Code** (e.g., `A7B9X2`).
-
-2. **Student Authentication & Code Verification:**
-   - The student opens the `student/` Windows desktop application and enters the 6-digit Exam Code.
-   - Backend checks code validity, master active status, and time window (`start_time <= UTC NOW <= end_time`).
-
-3. **Desktop Environment Lockdown:**
-   - The desktop app initiates `LockdownService` process monitoring.
-   - It verifies that the designated allowed browser is running and alerts/flags any non-permitted browser or forbidden background application.
-   - Regular heartbeats are sent to the backend to confirm active compliance.
-
-4. **Auto-Expiration Release:**
-   - When the scheduled `end_time` is reached, the backend heartbeat response returns `is_exam_active=false` with `time_remaining_seconds=0`.
-   - The student desktop application automatically terminates process restriction polling and notifies the student that restrictions are released.
+| Browser | Target Resource / AI Domain | Matrix Status | Result |
+|---|---|---|---|
+| Chrome | Standard Website (`wikipedia.org`) | N/A | **ALLOW** |
+| Chrome | Authorized AI (`claude.ai`) | Explicitly Allowed in Matrix | **ALLOW** |
+| Chrome | Unauthorized AI (`chatgpt.com`) | Not in Chrome Matrix | **DENY** |
+| Firefox | Authorized AI (`claude.ai`) | Firefox Not Authorized | **DENY** |
+| Opera | Any Resource | Unregistered Browser | **DENY** |
+| Claude Desktop (`Claude.exe`) | Native App | Not in Allowed Apps List | **DENY** |
 
 ---
 
 ## 5. Local Setup & Execution Guide
 
-### Prerequisites
-- Python 3.10+
-- PostgreSQL 18
-- Flutter SDK (for Web and Windows Desktop builds)
-
----
-
 ### Step 1: Run Backend Service (FastAPI)
-
 ```bash
-# Navigate to backend directory
 cd backend
-
-# Create virtual environment (optional)
 python -m venv venv
-# On Windows PowerShell:
-.\venv\Scripts\Activate.ps1
-
-# Install requirements
+# On Windows PowerShell: .\venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-
-# Set Database Connection String (Optional, defaults to local PostgreSQL)
-$env:DATABASE_URL="postgresql://postgres:postgres@localhost:5432/kasim_db"
-
-# Launch FastAPI server
 uvicorn app.main:app --reload --port 8000
 ```
-- Interactive API Documentation available at: `http://localhost:8000/docs`
-
----
+- Interactive API Documentation: `http://localhost:8000/docs`
 
 ### Step 2: Run Lecturer Web Dashboard
-
 ```bash
-# Navigate to lecturer directory
 cd lecturer
-
-# Install Flutter dependencies
 flutter pub get
-
-# Run Flutter Web app on Chrome
 flutter run -d chrome --web-port 3000
 ```
 
----
-
 ### Step 3: Run Student Windows Desktop Client
-
 ```bash
-# Navigate to student directory
 cd student
-
-# Install Flutter dependencies
 flutter pub get
-
-# Run Windows Desktop application
 flutter run -d windows
 ```

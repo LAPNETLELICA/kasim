@@ -20,6 +20,20 @@ def ensure_utc(dt: Optional[datetime]) -> Optional[datetime]:
     return dt
 
 
+def get_signed_policy_if_available(exam: models.ExamSession, db: Session) -> Optional[schemas.SignedPolicyPayload]:
+    if not exam.policy_id:
+        return None
+    policy = db.query(models.AccessPolicy).filter(models.AccessPolicy.id == exam.policy_id).first()
+    if not policy:
+        return None
+    from app.routers.resources import seed_default_resources_if_needed
+    from app.policy_engine import create_signed_policy_payload
+    seed_default_resources_if_needed(db)
+    browsers = db.query(models.BrowserResource).all()
+    ai_services = db.query(models.AIResource).all()
+    return create_signed_policy_payload(policy, browsers, ai_services)
+
+
 @router.post("/verify-code", response_model=schemas.LockdownRulesResponse)
 def verify_exam_code(req: schemas.VerifyCodeRequest, db: Session = Depends(get_db)):
     exam = db.query(models.ExamSession).filter(models.ExamSession.exam_code == req.exam_code.strip().upper()).first()
@@ -36,13 +50,17 @@ def verify_exam_code(req: schemas.VerifyCodeRequest, db: Session = Depends(get_d
             is_active=False,
             message="Invalid Exam Code. Please check and try again."
         )
-    
+
+    signed_p = get_signed_policy_if_available(exam, db)
+
     if not exam.is_active:
         return schemas.LockdownRulesResponse(
             valid=False,
             exam_id=exam.id,
             title=exam.title,
             allowed_browser=exam.allowed_browser,
+            policy_id=exam.policy_id,
+            signed_policy=signed_p,
             duration_minutes=exam.duration_minutes or 60,
             status=exam.status,
             start_time=ensure_utc(exam.start_time),
@@ -50,13 +68,15 @@ def verify_exam_code(req: schemas.VerifyCodeRequest, db: Session = Depends(get_d
             is_active=False,
             message="This exam session has been deactivated by the lecturer."
         )
-    
+
     if exam.status == "completed":
         return schemas.LockdownRulesResponse(
             valid=False,
             exam_id=exam.id,
             title=exam.title,
             allowed_browser=exam.allowed_browser,
+            policy_id=exam.policy_id,
+            signed_policy=signed_p,
             duration_minutes=exam.duration_minutes or 60,
             status="completed",
             start_time=ensure_utc(exam.start_time),
@@ -64,13 +84,15 @@ def verify_exam_code(req: schemas.VerifyCodeRequest, db: Session = Depends(get_d
             is_active=False,
             message="Exam session has already ended."
         )
-    
+
     if exam.status == "active":
         return schemas.LockdownRulesResponse(
             valid=False,
             exam_id=exam.id,
             title=exam.title,
             allowed_browser=exam.allowed_browser,
+            policy_id=exam.policy_id,
+            signed_policy=signed_p,
             duration_minutes=exam.duration_minutes or 60,
             status="active",
             start_time=ensure_utc(exam.start_time),
@@ -84,6 +106,8 @@ def verify_exam_code(req: schemas.VerifyCodeRequest, db: Session = Depends(get_d
         exam_id=exam.id,
         title=exam.title,
         allowed_browser=exam.allowed_browser,
+        policy_id=exam.policy_id,
+        signed_policy=signed_p,
         duration_minutes=exam.duration_minutes or 60,
         status="waiting",
         start_time=ensure_utc(exam.start_time),
@@ -105,17 +129,16 @@ def join_exam_session(
     exam = db.query(models.ExamSession).filter(models.ExamSession.exam_code == req.exam_code.strip().upper()).first()
     if not exam:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invalid exam code")
-    
+
     if not exam.is_active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Exam session is deactivated or unavailable"
         )
-    
+
     now = utc_now()
     end_t = ensure_utc(exam.end_time)
 
-    # Check auto-stop if active
     if exam.status == "active" and end_t and now >= end_t:
         exam.status = "completed"
         db.commit()
@@ -126,14 +149,14 @@ def join_exam_session(
             detail="Exam session has already concluded"
         )
 
-    # Check if student with this name already joined
+    signed_p = get_signed_policy_if_available(exam, db)
+
     existing_session = db.query(models.StudentSession).filter(
         models.StudentSession.exam_session_id == exam.id,
         models.StudentSession.student_name == student_name,
     ).first()
 
     if exam.status == "active" and not existing_session:
-        # If exam is already started and this student didn't join beforehand, block entry
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Exam session has already started. Late entry is not permitted."
@@ -150,6 +173,8 @@ def join_exam_session(
             exam_title=exam.title,
             student_name=existing_session.student_name,
             allowed_browser=exam.allowed_browser,
+            policy_id=exam.policy_id,
+            signed_policy=signed_p,
             duration_minutes=exam.duration_minutes or 60,
             exam_status=exam.status,
             start_time=ensure_utc(exam.start_time),
@@ -158,7 +183,6 @@ def join_exam_session(
             joined_at=ensure_utc(existing_session.joined_at) or now,
         )
 
-    # Register new student in waiting state
     new_session = models.StudentSession(
         exam_session_id=exam.id,
         student_name=student_name,
@@ -177,6 +201,8 @@ def join_exam_session(
         exam_title=exam.title,
         student_name=new_session.student_name,
         allowed_browser=exam.allowed_browser,
+        policy_id=exam.policy_id,
+        signed_policy=signed_p,
         duration_minutes=exam.duration_minutes or 60,
         exam_status=exam.status,
         start_time=ensure_utc(exam.start_time),
@@ -191,13 +217,26 @@ def session_heartbeat(req: schemas.HeartbeatRequest, db: Session = Depends(get_d
     session = db.query(models.StudentSession).filter(models.StudentSession.id == req.session_id).first()
     if not session:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student session not found")
-    
+
     exam = session.exam_session
     now = utc_now()
     end_t = ensure_utc(exam.end_time)
     start_t = ensure_utc(exam.start_time)
-    
-    # Check browser compliance if specified
+
+    # Ingest violation event if provided
+    if req.violation_event:
+        v = models.AuditViolation(
+            exam_session_id=exam.id,
+            student_session_id=session.id,
+            student_name=session.student_name,
+            device_id=req.violation_event.device_id or "Windows Desktop Agent",
+            violation_type=req.violation_event.violation_type,
+            resource_name=req.violation_event.resource_name,
+            action_taken=req.violation_event.action_taken,
+            details=req.violation_event.details
+        )
+        db.add(v)
+
     is_allowed = True
     message = "Lockdown active and compliant."
     if req.current_running_browser:
@@ -210,7 +249,9 @@ def session_heartbeat(req: schemas.HeartbeatRequest, db: Session = Depends(get_d
     session.last_heartbeat = now
     session.browser_compliant = is_allowed
 
-    # 1. Exam is in waiting lobby
+    signed_p = get_signed_policy_if_available(exam, db)
+    p_ver = signed_p.version if signed_p else 1
+
     if exam.status == "waiting":
         db.commit()
         return schemas.HeartbeatResponse(
@@ -218,13 +259,14 @@ def session_heartbeat(req: schemas.HeartbeatRequest, db: Session = Depends(get_d
             exam_status="waiting",
             is_exam_active=False,
             is_allowed=True,
+            policy_version=p_ver,
+            signed_policy=signed_p,
             time_remaining_seconds=(exam.duration_minutes or 60) * 60,
             start_time=None,
             end_time=None,
             message="Waiting in lobby for lecturer to start session."
         )
 
-    # 2. Exam is active: check expiration
     if exam.status == "active":
         if end_t and now >= end_t:
             exam.status = "completed"
@@ -235,12 +277,14 @@ def session_heartbeat(req: schemas.HeartbeatRequest, db: Session = Depends(get_d
                 exam_status="completed",
                 is_exam_active=False,
                 is_allowed=True,
+                policy_version=p_ver,
+                signed_policy=signed_p,
                 time_remaining_seconds=0,
                 start_time=start_t,
                 end_time=end_t,
                 message="Exam duration has ended. Lockdown automatically released."
             )
-        
+
         if not exam.is_active:
             session.status = "completed"
             db.commit()
@@ -249,6 +293,8 @@ def session_heartbeat(req: schemas.HeartbeatRequest, db: Session = Depends(get_d
                 exam_status="completed",
                 is_exam_active=False,
                 is_allowed=True,
+                policy_version=p_ver,
+                signed_policy=signed_p,
                 time_remaining_seconds=0,
                 start_time=start_t,
                 end_time=end_t,
@@ -266,13 +312,14 @@ def session_heartbeat(req: schemas.HeartbeatRequest, db: Session = Depends(get_d
             exam_status="active",
             is_exam_active=True,
             is_allowed=is_allowed,
+            policy_version=p_ver,
+            signed_policy=signed_p,
             time_remaining_seconds=max(0, time_remaining),
             start_time=start_t,
             end_time=end_t,
             message=message
         )
 
-    # 3. Exam is completed
     session.status = "completed"
     db.commit()
     return schemas.HeartbeatResponse(
@@ -280,11 +327,14 @@ def session_heartbeat(req: schemas.HeartbeatRequest, db: Session = Depends(get_d
         exam_status="completed",
         is_exam_active=False,
         is_allowed=True,
+        policy_version=p_ver,
+        signed_policy=signed_p,
         time_remaining_seconds=0,
         start_time=start_t,
         end_time=end_t,
         message="Exam session has completed. Lockdown released."
     )
+
 
 
 @router.post("/leave")

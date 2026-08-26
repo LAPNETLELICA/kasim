@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/exam.dart';
+import '../models/resource.dart';
+import '../models/policy.dart';
 import '../services/api_service.dart';
+import '../widgets/matrix_builder_widget.dart';
+import '../widgets/policy_preview_dialog.dart';
 import 'exam_monitor_screen.dart';
+import 'resource_manager_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final VoidCallback onLogout;
@@ -14,6 +19,7 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   List<ExamSession> exams = [];
+  List<AccessPolicy> policies = [];
   bool isLoading = true;
 
   @override
@@ -25,9 +31,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _loadExams() async {
     setState(() => isLoading = true);
     try {
-      final fetched = await ApiService.fetchExams();
+      final fetchedExams = await ApiService.fetchExams();
+      final fetchedPolicies = await ApiService.fetchPolicies();
       setState(() {
-        exams = fetched;
+        exams = fetchedExams;
+        policies = fetchedPolicies;
         isLoading = false;
       });
     } catch (e) {
@@ -38,8 +46,147 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void _showCreateExamModal() {
     showDialog(
       context: context,
-      builder: (context) => const CreateExamDialog(),
+      builder: (context) => CreateExamDialog(policies: policies),
     ).then((_) => _loadExams());
+  }
+
+  void _showCreatePolicyModal() async {
+    List<BrowserResource> browsers = [];
+    List<AIResource> aiServices = [];
+
+    try {
+      browsers = await ApiService.fetchBrowsers();
+      aiServices = await ApiService.fetchAIServices();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error fetching resources: $e'), backgroundColor: Colors.red),
+      );
+      return;
+    }
+
+    final titleCtrl = TextEditingController(text: 'Exam Security Policy');
+    final descCtrl = TextEditingController();
+
+    List<String> allowedBrowsers = browsers.map((b) => b.id).toList();
+    List<String> allowedAi = [];
+    Map<String, List<String>> matrix = {};
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return AlertDialog(
+              title: const Row(
+                children: [
+                  Icon(Icons.security, color: Colors.blue),
+                  SizedBox(width: 8),
+                  Text('Create Policy (Default-Deny Engine)'),
+                ],
+              ),
+              content: SizedBox(
+                width: 850,
+                height: 600,
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TextField(
+                        controller: titleCtrl,
+                        decoration: const InputDecoration(labelText: 'Policy Title (e.g. CS101 Final Exam Policy)'),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: descCtrl,
+                        decoration: const InputDecoration(labelText: 'Description (Optional)'),
+                      ),
+                      const SizedBox(height: 20),
+                      MatrixBuilderWidget(
+                        browsers: browsers,
+                        aiServices: aiServices,
+                        selectedBrowserIds: allowedBrowsers,
+                        selectedAiIds: allowedAi,
+                        browserAiMatrix: matrix,
+                        onChanged: (bList, aList, mDict) {
+                          allowedBrowsers = bList;
+                          allowedAi = aList;
+                          matrix = mDict;
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cancel'),
+                ),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.preview),
+                  label: const Text('Preview Policy Matrix'),
+                  onPressed: () async {
+                    final draftPayload = {
+                      'title': titleCtrl.text.trim().isEmpty ? 'Draft Policy' : titleCtrl.text.trim(),
+                      'browser_mode': 'ALLOW_SELECTED',
+                      'ai_mode': 'ALLOW_SELECTED',
+                      'desktop_app_mode': 'BLOCK_ALL_UNAUTHORIZED',
+                      'allowed_browsers': allowedBrowsers,
+                      'allowed_ai': allowedAi,
+                      'browser_ai_matrix': matrix,
+                      'allowed_desktop_apps': [],
+                    };
+
+                    try {
+                      final preview = await ApiService.previewDraftPolicy(draftPayload);
+                      showDialog(
+                        context: context,
+                        builder: (ctx2) => PolicyPreviewDialog(preview: preview),
+                      );
+                    } catch (e) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Error generating preview: $e'), backgroundColor: Colors.red),
+                      );
+                    }
+                  },
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    if (titleCtrl.text.trim().isEmpty) return;
+
+                    final policyPayload = {
+                      'title': titleCtrl.text.trim(),
+                      'description': descCtrl.text.trim(),
+                      'browser_mode': 'ALLOW_SELECTED',
+                      'ai_mode': 'ALLOW_SELECTED',
+                      'desktop_app_mode': 'BLOCK_ALL_UNAUTHORIZED',
+                      'allowed_browsers': allowedBrowsers,
+                      'allowed_ai': allowedAi,
+                      'browser_ai_matrix': matrix,
+                      'allowed_desktop_apps': [],
+                    };
+
+                    try {
+                      await ApiService.createPolicy(policyPayload);
+                      Navigator.pop(ctx);
+                      _loadExams();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Access Policy created successfully!'), backgroundColor: Colors.green),
+                      );
+                    } catch (e) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Error creating policy: $e'), backgroundColor: Colors.red),
+                      );
+                    }
+                  },
+                  child: const Text('Save & Apply Policy'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   Widget _buildStatusBadge(ExamSession exam) {
@@ -102,6 +249,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ],
         ),
         actions: [
+          ElevatedButton.icon(
+            icon: const Icon(Icons.tune, size: 16),
+            label: const Text('Resource Registry'),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF21262D)),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (ctx) => const ResourceManagerScreen()),
+              );
+            },
+          ),
+          const SizedBox(width: 8),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.policy, size: 16),
+            label: const Text('Create Policy'),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1F6FEB)),
+            onPressed: _showCreatePolicyModal,
+          ),
+          const SizedBox(width: 12),
           IconButton(
             icon: const Icon(Icons.refresh, color: Color(0xFF8B949E)),
             onPressed: _loadExams,
@@ -125,7 +291,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      "Exam Sessions",
+                      "Exam Sessions & Policy Engine",
                       style: TextStyle(
                         fontSize: 28,
                         fontWeight: FontWeight.bold,
@@ -134,7 +300,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                     SizedBox(height: 4),
                     Text(
-                      "Create, launch, monitor and view attendance for locked exam sessions",
+                      "Create, launch, monitor and enforce default-deny policies for student desktops",
                       style: TextStyle(color: Color(0xFF8B949E)),
                     ),
                   ],
@@ -315,7 +481,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
 }
 
 class CreateExamDialog extends StatefulWidget {
-  const CreateExamDialog({super.key});
+  final List<AccessPolicy> policies;
+  const CreateExamDialog({super.key, required this.policies});
 
   @override
   State<CreateExamDialog> createState() => _CreateExamDialogState();
@@ -325,6 +492,7 @@ class _CreateExamDialogState extends State<CreateExamDialog> {
   final titleController = TextEditingController();
   final durationController = TextEditingController(text: "60");
   String allowedBrowser = "Google Chrome";
+  String? selectedPolicyId;
   bool isSubmitting = false;
   String? error;
 
@@ -334,6 +502,14 @@ class _CreateExamDialogState extends State<CreateExamDialog> {
     "Mozilla Firefox",
     "Brave",
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.policies.isNotEmpty) {
+      selectedPolicyId = widget.policies.first.id;
+    }
+  }
 
   Future<void> _submit() async {
     if (titleController.text.trim().isEmpty) {
@@ -357,6 +533,7 @@ class _CreateExamDialogState extends State<CreateExamDialog> {
         title: titleController.text.trim(),
         durationMinutes: durationMins,
         allowedBrowser: allowedBrowser,
+        policyId: selectedPolicyId,
       );
       if (mounted) Navigator.pop(context);
     } catch (e) {
@@ -374,7 +551,7 @@ class _CreateExamDialogState extends State<CreateExamDialog> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       title: const Text("Create Exam Session", style: TextStyle(color: Colors.white)),
       content: SizedBox(
-        width: 440,
+        width: 480,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -408,7 +585,23 @@ class _CreateExamDialogState extends State<CreateExamDialog> {
               ),
             ),
             const SizedBox(height: 16),
-            const Text("Allowed Browser Policy:", style: TextStyle(color: Color(0xFF8B949E), fontSize: 13)),
+            if (widget.policies.isNotEmpty) ...[
+              const Text("Attach Access Control Policy:", style: TextStyle(color: Color(0xFF8B949E), fontSize: 13)),
+              DropdownButton<String>(
+                value: selectedPolicyId,
+                dropdownColor: const Color(0xFF161B22),
+                isExpanded: true,
+                style: const TextStyle(color: Colors.white),
+                items: widget.policies.map((p) {
+                  return DropdownMenuItem(value: p.id, child: Text('${p.title} (v${p.version})'));
+                }).toList(),
+                onChanged: (val) {
+                  if (val != null) setState(() => selectedPolicyId = val);
+                },
+              ),
+              const SizedBox(height: 12),
+            ],
+            const Text("Fallback Allowed Browser:", style: TextStyle(color: Color(0xFF8B949E), fontSize: 13)),
             DropdownButton<String>(
               value: allowedBrowser,
               dropdownColor: const Color(0xFF161B22),
@@ -451,3 +644,4 @@ class _CreateExamDialogState extends State<CreateExamDialog> {
     );
   }
 }
+

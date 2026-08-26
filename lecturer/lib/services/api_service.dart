@@ -1,6 +1,10 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/exam.dart';
+import '../models/resource.dart';
+import '../models/policy.dart';
+import '../models/audit.dart';
+
 
 class ApiService {
   static String baseUrl = 'http://localhost:8000/api';
@@ -98,11 +102,13 @@ class ApiService {
     required String title,
     required int durationMinutes,
     required String allowedBrowser,
+    String? policyId,
   }) async {
     final body = <String, dynamic>{
       'title': title,
       'duration_minutes': durationMinutes,
       'allowed_browser': allowedBrowser,
+      if (policyId != null) 'policy_id': policyId,
     };
 
     final response = await _postRequest('/exams/', body);
@@ -112,6 +118,97 @@ class ApiService {
     } else {
       final error = jsonDecode(response.body);
       throw Exception(error['detail'] ?? 'Failed to create exam');
+    }
+  }
+
+  static Future<List<BrowserResource>> fetchBrowsers() async {
+    final response = await _getRequest('/resources/browsers');
+    if (response.statusCode == 200) {
+      List data = jsonDecode(response.body);
+      return data.map((item) => BrowserResource.fromJson(item)).toList();
+    } else {
+      throw Exception('Failed to load browser resources');
+    }
+  }
+
+  static Future<BrowserResource> addBrowserResource(String name, List<String> executables, String? description) async {
+    final response = await _postRequest('/resources/browsers', {
+      'name': name,
+      'executables': executables,
+      'description': description,
+    });
+
+    if (response.statusCode == 201) {
+      return BrowserResource.fromJson(jsonDecode(response.body));
+    } else {
+      final error = jsonDecode(response.body);
+      throw Exception(error['detail'] ?? 'Failed to add browser resource');
+    }
+  }
+
+  static Future<List<AIResource>> fetchAIServices() async {
+    final response = await _getRequest('/resources/ai-services');
+    if (response.statusCode == 200) {
+      List data = jsonDecode(response.body);
+      return data.map((item) => AIResource.fromJson(item)).toList();
+    } else {
+      throw Exception('Failed to load AI resources');
+    }
+  }
+
+  static Future<AIResource> addAIResource(String name, List<String> domains, List<String> desktopExecutables, String? description) async {
+    final response = await _postRequest('/resources/ai-services', {
+      'name': name,
+      'domains': domains,
+      'desktop_executables': desktopExecutables,
+      'description': description,
+    });
+
+    if (response.statusCode == 201) {
+      return AIResource.fromJson(jsonDecode(response.body));
+    } else {
+      final error = jsonDecode(response.body);
+      throw Exception(error['detail'] ?? 'Failed to add AI resource');
+    }
+  }
+
+  static Future<List<AccessPolicy>> fetchPolicies() async {
+    final response = await _getRequest('/policies');
+    if (response.statusCode == 200) {
+      List data = jsonDecode(response.body);
+      return data.map((item) => AccessPolicy.fromJson(item)).toList();
+    } else {
+      throw Exception('Failed to load policies');
+    }
+  }
+
+  static Future<AccessPolicy> createPolicy(Map<String, dynamic> policyData) async {
+    final response = await _postRequest('/policies', policyData);
+    if (response.statusCode == 201) {
+      return AccessPolicy.fromJson(jsonDecode(response.body));
+    } else {
+      final error = jsonDecode(response.body);
+      throw Exception(error['detail'] ?? 'Failed to create access policy');
+    }
+  }
+
+  static Future<PolicyPreviewResponse> previewDraftPolicy(Map<String, dynamic> policyData) async {
+    final response = await _postRequest('/policies/preview-draft', policyData);
+    if (response.statusCode == 200) {
+      return PolicyPreviewResponse.fromJson(jsonDecode(response.body));
+    } else {
+      final error = jsonDecode(response.body);
+      throw Exception(error['detail'] ?? 'Failed to generate policy preview');
+    }
+  }
+
+  static Future<List<AuditViolation>> fetchExamViolations(String examId) async {
+    final response = await _getRequest('/audit/violations/$examId');
+    if (response.statusCode == 200) {
+      List data = jsonDecode(response.body);
+      return data.map((item) => AuditViolation.fromJson(item)).toList();
+    } else {
+      throw Exception('Failed to fetch exam audit violations');
     }
   }
 
@@ -178,3 +275,4 @@ class ApiService {
     }
   }
 }
+

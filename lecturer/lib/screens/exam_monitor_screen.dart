@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../models/exam.dart';
 import '../services/api_service.dart';
+import 'live_audit_screen.dart';
+
 
 class ExamMonitorScreen extends StatefulWidget {
   final String examId;
@@ -250,6 +252,20 @@ class _ExamMonitorScreenState extends State<ExamMonitorScreen> {
         ),
         actions: [
           IconButton(
+            tooltip: "Live Audit & Violations",
+            icon: const Icon(Icons.security_update_warning, color: Colors.orangeAccent),
+            onPressed: () {
+              if (exam != null) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (ctx) => LiveAuditScreen(examId: exam!.id, examTitle: exam!.title),
+                  ),
+                );
+              }
+            },
+          ),
+          IconButton(
             tooltip: "Refresh Data",
             icon: const Icon(Icons.refresh, color: Color(0xFF8B949E)),
             onPressed: _fetchDetails,
@@ -261,6 +277,7 @@ class _ExamMonitorScreenState extends State<ExamMonitorScreen> {
           ),
           const SizedBox(width: 16),
         ],
+
       ),
       body: isLoading || exam == null
           ? const Center(child: CircularProgressIndicator(color: Color(0xFF58A6FF)))

@@ -1,14 +1,14 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import engine, Base
-from app.routers import auth, exams, sessions
+from app.routers import auth, exams, sessions, resources, policies, audit
 
 # Initialize database tables
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="Kasim Secure Exam Platform API",
-    description="Backend service powering the Kasim exam management and browser lockdown system.",
+    description="Backend service powering the Kasim policy-based access control and browser lockdown system.",
     version="2.0.0",
     docs_url="/docs",
     redoc_url="/redoc"
@@ -27,6 +27,10 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(exams.router)
 app.include_router(sessions.router)
+app.include_router(resources.router)
+app.include_router(policies.router)
+app.include_router(audit.router)
+
 
 
 @app.get("/")

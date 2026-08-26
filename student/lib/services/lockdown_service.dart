@@ -5,6 +5,8 @@ import 'package:ffi/ffi.dart';
 import 'package:win32/win32.dart';
 import '../models/student_session.dart';
 import 'api_service.dart';
+import 'policy_verifier.dart';
+import 'browser_policy_guard.dart';
 
 class LockdownService {
   final ActiveStudentSession session;
@@ -241,6 +243,8 @@ class LockdownService {
     _tickerTimer?.cancel();
     _monitorTimer?.cancel();
     _heartbeatTimer?.cancel();
+    BrowserPolicyGuard.clearManagedBrowserPolicies();
     _statusMessage = "Lockdown restrictions released.";
   }
 }
+

@@ -61,14 +61,23 @@ def create_exam_session(
     current_user: models.User = Depends(security.require_role("lecturer")),
 ):
     unique_code = generate_unique_exam_code(db)
-    
+
+    allowed_browser_val = exam_in.allowed_browser or "Google Chrome"
+
+    # If policy_id provided, verify policy exists
+    if exam_in.policy_id:
+        policy = db.query(models.AccessPolicy).filter(models.AccessPolicy.id == exam_in.policy_id).first()
+        if not policy:
+            raise HTTPException(status_code=404, detail="Access policy not found")
+
     exam = models.ExamSession(
         title=exam_in.title,
         duration_minutes=exam_in.duration_minutes,
         status="waiting",
         start_time=None,
         end_time=None,
-        allowed_browser=exam_in.allowed_browser,
+        allowed_browser=allowed_browser_val,
+        policy_id=exam_in.policy_id,
         exam_code=unique_code,
         is_active=True,
         lecturer_id=current_user.id,
@@ -76,7 +85,7 @@ def create_exam_session(
     db.add(exam)
     db.commit()
     db.refresh(exam)
-    
+
     return schemas.ExamSessionResponse(
         id=exam.id,
         title=exam.title,
@@ -85,11 +94,13 @@ def create_exam_session(
         start_time=ensure_utc(exam.start_time),
         end_time=ensure_utc(exam.end_time),
         allowed_browser=exam.allowed_browser,
+        policy_id=exam.policy_id,
         exam_code=exam.exam_code,
         is_active=exam.is_active,
         lecturer_id=exam.lecturer_id,
         created_at=ensure_utc(exam.created_at) or utc_now(),
     )
+
 
 
 @router.get("/", response_model=List[schemas.ExamSessionDetail])
