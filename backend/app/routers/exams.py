@@ -63,12 +63,41 @@ def create_exam_session(
     unique_code = generate_unique_exam_code(db)
 
     allowed_browser_val = exam_in.allowed_browser or "Google Chrome"
+    policy_id_val = exam_in.policy_id
 
-    # If policy_id provided, verify policy exists
-    if exam_in.policy_id:
-        policy = db.query(models.AccessPolicy).filter(models.AccessPolicy.id == exam_in.policy_id).first()
-        if not policy:
-            raise HTTPException(status_code=404, detail="Access policy not found")
+    # If no policy_id provided, auto-create a signed AccessPolicy for this exam session
+    if not policy_id_val:
+        # Check or register browser resource
+        b_res = db.query(models.BrowserResource).filter(
+            models.BrowserResource.name.ilike(allowed_browser_val)
+        ).first()
+        if not b_res:
+            exe = f"{allowed_browser_val.lower().replace(' ', '')}.exe"
+            b_res = models.BrowserResource(
+                id=f"browser_{models.uuid.uuid4().hex[:8]}",
+                name=allowed_browser_val,
+                executables=models.json.dumps([exe, allowed_browser_val.lower()]),
+                description=f"Auto registered browser for exam {exam_in.title}",
+                is_custom=True
+            )
+            db.add(b_res)
+            db.commit()
+            db.refresh(b_res)
+
+        from app.policy_engine import create_signed_policy
+        auto_policy = create_signed_policy(
+            db=db,
+            title=f"Policy for {exam_in.title}",
+            description=f"Auto-generated default-deny policy for exam session",
+            browser_mode="ALLOW_SELECTED",
+            ai_mode="ALLOW_SELECTED",
+            desktop_app_mode="BLOCK_ALL_UNAUTHORIZED",
+            allowed_browsers=[b_res.id],
+            allowed_ai=[],
+            browser_ai_matrix={b_res.id: []},
+            allowed_desktop_apps=[]
+        )
+        policy_id_val = auto_policy.id
 
     exam = models.ExamSession(
         title=exam_in.title,
@@ -77,7 +106,7 @@ def create_exam_session(
         start_time=None,
         end_time=None,
         allowed_browser=allowed_browser_val,
-        policy_id=exam_in.policy_id,
+        policy_id=policy_id_val,
         exam_code=unique_code,
         is_active=True,
         lecturer_id=current_user.id,
@@ -85,6 +114,7 @@ def create_exam_session(
     db.add(exam)
     db.commit()
     db.refresh(exam)
+
 
     return schemas.ExamSessionResponse(
         id=exam.id,

@@ -491,17 +491,12 @@ class CreateExamDialog extends StatefulWidget {
 class _CreateExamDialogState extends State<CreateExamDialog> {
   final titleController = TextEditingController();
   final durationController = TextEditingController(text: "60");
-  String allowedBrowser = "Google Chrome";
+  final browserController = TextEditingController(text: "Google Chrome");
+  final aiController = TextEditingController(text: "Claude");
+  bool allowAiAccess = false;
   String? selectedPolicyId;
   bool isSubmitting = false;
   String? error;
-
-  final List<String> browserOptions = [
-    "Google Chrome",
-    "Microsoft Edge",
-    "Mozilla Firefox",
-    "Brave",
-  ];
 
   @override
   void initState() {
@@ -512,8 +507,17 @@ class _CreateExamDialogState extends State<CreateExamDialog> {
   }
 
   Future<void> _submit() async {
-    if (titleController.text.trim().isEmpty) {
-      setState(() => error = "Title cannot be empty");
+    final title = titleController.text.trim();
+    final browserName = browserController.text.trim();
+    final aiName = aiController.text.trim();
+
+    if (title.isEmpty) {
+      setState(() => error = "Exam Title cannot be empty");
+      return;
+    }
+
+    if (browserName.isEmpty) {
+      setState(() => error = "Please enter exact allowed browser name");
       return;
     }
 
@@ -529,12 +533,70 @@ class _CreateExamDialogState extends State<CreateExamDialog> {
     });
 
     try {
+      // 1. Create or register resources for the exact browser & AI name
+      List<BrowserResource> browsers = await ApiService.fetchBrowsers();
+      List<AIResource> aiServices = await ApiService.fetchAIServices();
+
+      String? bId;
+      for (final b in browsers) {
+        if (b.name.toLowerCase() == browserName.toLowerCase()) {
+          bId = b.id;
+          break;
+        }
+      }
+      if (bId == null) {
+        final newB = await ApiService.addBrowserResource(
+          browserName,
+          [f'{browserName.toLowerCase().replaceAll(" ", "")}.exe', browserName.toLowerCase()],
+          "Direct exam creation browser resource",
+        );
+        bId = newB.id;
+      }
+
+      String? aId;
+      if (allowAiAccess && aiName.isNotEmpty && aiName.toLowerCase() != "none") {
+        for (final a in aiServices) {
+          if (a.name.toLowerCase() == aiName.toLowerCase()) {
+            aId = a.id;
+            break;
+          }
+        }
+        if (aId == null) {
+          final newA = await ApiService.addAIResource(
+            aiName,
+            [f'{aiName.toLowerCase().replaceAll(" ", "")}.ai', f'{aiName.toLowerCase()}.com'],
+            [f'{aiName}.exe'],
+            "Direct exam creation AI resource",
+          );
+          aId = newA.id;
+        }
+      }
+
+      // 2. Create the exact Default-Deny Access Policy
+      final policyPayload = {
+        'title': 'Policy for $title',
+        'description': 'Policy created directly with exam session',
+        'browser_mode': 'ALLOW_SELECTED',
+        'ai_mode': allowAiAccess ? 'ALLOW_SELECTED' : 'BLOCK_ALL',
+        'desktop_app_mode': 'BLOCK_ALL_UNAUTHORIZED',
+        'allowed_browsers': [bId],
+        'allowed_ai': (allowAiAccess && aId != null) ? [aId] : [],
+        'browser_ai_matrix': {
+          bId: (allowAiAccess && aId != null) ? [aId] : []
+        },
+        'allowed_desktop_apps': [],
+      };
+
+      final policy = await ApiService.createPolicy(policyPayload);
+
+      // 3. Create Exam Session with attached policy ID
       await ApiService.createExam(
-        title: titleController.text.trim(),
+        title: title,
         durationMinutes: durationMins,
-        allowedBrowser: allowedBrowser,
-        policyId: selectedPolicyId,
+        allowedBrowser: browserName,
+        policyId: policy.id,
       );
+
       if (mounted) Navigator.pop(context);
     } catch (e) {
       setState(() {
@@ -548,86 +610,136 @@ class _CreateExamDialogState extends State<CreateExamDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       backgroundColor: const Color(0xFF161B22),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      title: const Text("Create Exam Session", style: TextStyle(color: Colors.white)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: const Row(
+        children: [
+          Icon(Icons.add_task, color: Color(0xFF58A6FF)),
+          SizedBox(width: 10),
+          Text("Create Exam & Policy Session", style: TextStyle(color: Colors.white, fontSize: 20)),
+        ],
+      ),
       content: SizedBox(
-        width: 480,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (error != null) ...[
-              Text(error!, style: const TextStyle(color: Color(0xFFF85149))),
-              const SizedBox(height: 12),
-            ],
-            TextField(
-              controller: titleController,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
-                labelText: "Exam Title",
-                labelStyle: TextStyle(color: Color(0xFF8B949E)),
-                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF30363D))),
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: durationController,
-              keyboardType: TextInputType.number,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
-                labelText: "Exam Duration (Minutes)",
-                hintText: "e.g. 30, 60, 90, 120",
-                labelStyle: TextStyle(color: Color(0xFF8B949E)),
-                hintStyle: TextStyle(color: Color(0xFF484F58)),
-                suffixText: "mins",
-                suffixStyle: TextStyle(color: Color(0xFF58A6FF)),
-                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF30363D))),
-              ),
-            ),
-            const SizedBox(height: 16),
-            if (widget.policies.isNotEmpty) ...[
-              const Text("Attach Access Control Policy:", style: TextStyle(color: Color(0xFF8B949E), fontSize: 13)),
-              DropdownButton<String>(
-                value: selectedPolicyId,
-                dropdownColor: const Color(0xFF161B22),
-                isExpanded: true,
+        width: 520,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (error != null) ...[
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF3D1418),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFF85149)),
+                  ),
+                  child: Text(error!, style: const TextStyle(color: Color(0xFFFF7B72), fontSize: 13)),
+                ),
+                const SizedBox(height: 14),
+              ],
+              TextField(
+                controller: titleController,
                 style: const TextStyle(color: Colors.white),
-                items: widget.policies.map((p) {
-                  return DropdownMenuItem(value: p.id, child: Text('${p.title} (v${p.version})'));
-                }).toList(),
+                decoration: const InputDecoration(
+                  labelText: "Exam Title",
+                  hintText: "e.g. CS101 Final Examination",
+                  labelStyle: TextStyle(color: Color(0xFF8B949E)),
+                  hintStyle: TextStyle(color: Color(0xFF484F58)),
+                  enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFF30363D))),
+                  focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFF58A6FF))),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: durationController,
+                keyboardType: TextInputType.number,
+                style: const TextStyle(color: Colors.white),
+                decoration: const InputDecoration(
+                  labelText: "Exam Duration (Minutes)",
+                  hintText: "e.g. 60, 90, 120",
+                  labelStyle: TextStyle(color: Color(0xFF8B949E)),
+                  suffixText: "mins",
+                  suffixStyle: TextStyle(color: Color(0xFF58A6FF)),
+                  enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFF30363D))),
+                  focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFF58A6FF))),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                "DEFAULT-DENY POLICY ENGINE CONFIGURATION",
+                style: TextStyle(color: Color(0xFF58A6FF), fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: browserController,
+                style: const TextStyle(color: Colors.white),
+                decoration: const InputDecoration(
+                  labelText: "Exact Allowed Browser Name",
+                  hintText: "e.g. Google Chrome, Microsoft Edge, Vivaldi",
+                  labelStyle: TextStyle(color: Color(0xFF8B949E)),
+                  prefixIcon: Icon(Icons.language, color: Color(0xFF8B949E)),
+                  enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFF30363D))),
+                  focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFF58A6FF))),
+                ),
+              ),
+              const SizedBox(height: 14),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text("Authorize Specific AI Access?", style: TextStyle(color: Colors.white, fontSize: 14)),
+                subtitle: Text(
+                  allowAiAccess
+                      ? "Pair allowed browser with specific AI service"
+                      : "Browser Without AI Mode (All AI services blocked)",
+                  style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                ),
+                value: allowAiAccess,
+                activeColor: const Color(0xFF3FB950),
                 onChanged: (val) {
-                  if (val != null) setState(() => selectedPolicyId = val);
+                  setState(() {
+                    allowAiAccess = val;
+                  });
                 },
               ),
-              const SizedBox(height: 12),
+              if (allowAiAccess) ...[
+                const SizedBox(height: 8),
+                TextField(
+                  controller: aiController,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: const InputDecoration(
+                    labelText: "Exact Allowed AI Service Name / Domain",
+                    hintText: "e.g. Claude, ChatGPT, DeepSeek, claude.ai",
+                    labelStyle: TextStyle(color: Color(0xFF8B949E)),
+                    prefixIcon: Icon(Icons.smart_toy_outlined, color: Color(0xFF8B949E)),
+                    enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFF30363D))),
+                    focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFF58A6FF))),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0D1117),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFF30363D)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.verified_user_outlined, color: Color(0xFF3FB950), size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        allowAiAccess
+                            ? "Policy Enforced: Only '${browserController.text}' + '${aiController.text}' will be ALLOWED. All other browsers and AI services are DENIED."
+                            : "Policy Enforced: Only '${browserController.text}' is ALLOWED. ALL AI services and other browsers are DENIED.",
+                        style: const TextStyle(color: Color(0xFF8B949E), fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
-            const Text("Fallback Allowed Browser:", style: TextStyle(color: Color(0xFF8B949E), fontSize: 13)),
-            DropdownButton<String>(
-              value: allowedBrowser,
-              dropdownColor: const Color(0xFF161B22),
-              isExpanded: true,
-              style: const TextStyle(color: Colors.white),
-              items: browserOptions.map((b) {
-                return DropdownMenuItem(value: b, child: Text(b));
-              }).toList(),
-              onChanged: (val) {
-                if (val != null) setState(() => allowedBrowser = val);
-              },
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0xFF0D1117),
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: const Color(0xFF30363D)),
-              ),
-              child: const Text(
-                "Note: Session will be created in a waiting lobby. Students can join with the generated code. Once you click 'Start Session', late joiners are blocked.",
-                style: TextStyle(color: Color(0xFF8B949E), fontSize: 12),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
       actions: [
@@ -635,13 +747,25 @@ class _CreateExamDialogState extends State<CreateExamDialog> {
           onPressed: () => Navigator.pop(context),
           child: const Text("Cancel", style: TextStyle(color: Color(0xFF8B949E))),
         ),
-        ElevatedButton(
+        ElevatedButton.icon(
           onPressed: isSubmitting ? null : _submit,
-          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF238636)),
-          child: const Text("Generate Exam Code", style: TextStyle(color: Colors.white)),
+          icon: isSubmitting
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                )
+              : const Icon(Icons.check, color: Colors.white, size: 18),
+          label: const Text("Create & Apply Exam Policy", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF238636),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
         )
       ],
     );
   }
 }
+
 
