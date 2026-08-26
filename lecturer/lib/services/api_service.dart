@@ -81,6 +81,23 @@ class ApiService {
     }
   }
 
+  static Future<Map<String, dynamic>> googleLogin(String email, String name) async {
+    final response = await _postRequest('/auth/google', {
+      'email': email,
+      'name': name,
+    });
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      token = data['access_token'];
+      return data;
+    } else {
+      final error = jsonDecode(response.body);
+      throw Exception(error['detail'] ?? 'Google authentication failed');
+    }
+  }
+
+
   static Future<Map<String, dynamic>> register(
       String username, String email, String password) async {
     final response = await _postRequest('/auth/register', {

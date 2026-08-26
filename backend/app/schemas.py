@@ -38,6 +38,13 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class GoogleLoginRequest(BaseModel):
+    email: EmailStr
+    name: Optional[str] = "Google Lecturer User"
+    google_id: Optional[str] = None
+
+
+
 ALLOWED_BROWSERS = Literal[
     "Google Chrome",
     "Microsoft Edge",
