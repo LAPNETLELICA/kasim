@@ -5,17 +5,23 @@ from pydantic import BaseModel, EmailStr, Field
 
 # --- Auth & User Schemas ---
 class UserBase(BaseModel):
+    username: str = Field(..., min_length=2, description="Platform Name / Username")
+    email: EmailStr
+    role: str = Field(default="lecturer", description="Role must be 'lecturer' or 'student'")
+
+
+class UserCreate(BaseModel):
+    username: str = Field(..., min_length=2, description="Platform Name / Full Name")
+    email: EmailStr
+    password: str = Field(..., min_length=6)
+    role: str = Field(default="lecturer")
+
+
+class UserResponse(BaseModel):
+    id: str
     username: str
     email: EmailStr
-    role: str = Field(..., description="Role must be 'lecturer' or 'student'")
-
-
-class UserCreate(UserBase):
-    password: str = Field(..., min_length=6)
-
-
-class UserResponse(UserBase):
-    id: str
+    role: str
     created_at: datetime
 
     class Config:
@@ -34,7 +40,8 @@ class TokenData(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    username: str
+    identifier: Optional[str] = Field(None, description="Email or Platform Name")
+    username: Optional[str] = Field(None, description="Fallback username")
     password: str
 
 

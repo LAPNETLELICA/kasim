@@ -19,6 +19,8 @@ class LockdownRules {
   final String examId;
   final String title;
   final String allowedBrowser;
+  final String? policyId;
+  final Map<String, dynamic>? signedPolicy;
   final int durationMinutes;
   final String status;
   final DateTime? startTime;
@@ -31,6 +33,8 @@ class LockdownRules {
     required this.examId,
     required this.title,
     required this.allowedBrowser,
+    this.policyId,
+    this.signedPolicy,
     required this.durationMinutes,
     required this.status,
     this.startTime,
@@ -45,6 +49,8 @@ class LockdownRules {
       examId: json['exam_id'] ?? '',
       title: json['title'] ?? '',
       allowedBrowser: json['allowed_browser'] ?? 'Google Chrome',
+      policyId: json['policy_id'],
+      signedPolicy: json['signed_policy'] != null ? Map<String, dynamic>.from(json['signed_policy']) : null,
       durationMinutes: json['duration_minutes'] ?? 60,
       status: json['status'] ?? 'waiting',
       startTime: parseUtc(json['start_time']),
@@ -61,6 +67,8 @@ class ActiveStudentSession {
   final String examTitle;
   final String studentName;
   final String allowedBrowser;
+  final String? policyId;
+  final Map<String, dynamic>? signedPolicy;
   final int durationMinutes;
   String examStatus;
   DateTime? startTime;
@@ -74,6 +82,8 @@ class ActiveStudentSession {
     required this.examTitle,
     required this.studentName,
     required this.allowedBrowser,
+    this.policyId,
+    this.signedPolicy,
     required this.durationMinutes,
     required this.examStatus,
     this.startTime,
@@ -89,6 +99,8 @@ class ActiveStudentSession {
       examTitle: json['exam_title'] ?? '',
       studentName: json['student_name'] ?? '',
       allowedBrowser: json['allowed_browser'] ?? 'Google Chrome',
+      policyId: json['policy_id'],
+      signedPolicy: json['signed_policy'] != null ? Map<String, dynamic>.from(json['signed_policy']) : null,
       durationMinutes: json['duration_minutes'] ?? 60,
       examStatus: json['exam_status'] ?? 'waiting',
       startTime: parseUtc(json['start_time']),
@@ -104,6 +116,8 @@ class HeartbeatResult {
   final String examStatus;
   final bool isExamActive;
   final bool isAllowed;
+  final int policyVersion;
+  final Map<String, dynamic>? signedPolicy;
   final int timeRemainingSeconds;
   final DateTime? startTime;
   final DateTime? endTime;
@@ -114,6 +128,8 @@ class HeartbeatResult {
     required this.examStatus,
     required this.isExamActive,
     required this.isAllowed,
+    this.policyVersion = 1,
+    this.signedPolicy,
     required this.timeRemainingSeconds,
     this.startTime,
     this.endTime,
@@ -126,6 +142,8 @@ class HeartbeatResult {
       examStatus: json['exam_status'] ?? 'waiting',
       isExamActive: json['is_exam_active'] ?? false,
       isAllowed: json['is_allowed'] ?? true,
+      policyVersion: json['policy_version'] ?? 1,
+      signedPolicy: json['signed_policy'] != null ? Map<String, dynamic>.from(json['signed_policy']) : null,
       timeRemainingSeconds: json['time_remaining_seconds'] ?? 0,
       startTime: parseUtc(json['start_time']),
       endTime: parseUtc(json['end_time']),

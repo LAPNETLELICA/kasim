@@ -90,7 +90,7 @@ class LocalPolicyEngine {
     for (final ai in registeredAi) {
       final doms = List<String>.from(ai['domains'] ?? []);
       for (final dom in doms) {
-        if (domain.toLowerCase() == dom.toLowerCase() || domain.toLowerCase().endsWith('.' + dom.toLowerCase())) {
+        if (domain.toLowerCase() == dom.toLowerCase() || domain.toLowerCase().endsWith('.${dom.toLowerCase()}')) {
           matchedAi = Map<String, dynamic>.from(ai);
           break;
         }

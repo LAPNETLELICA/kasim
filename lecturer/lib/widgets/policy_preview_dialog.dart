@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../main.dart';
 import '../models/policy.dart';
 
 class PolicyPreviewDialog extends StatelessWidget {
@@ -9,21 +10,27 @@ class PolicyPreviewDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
+      backgroundColor: AppTheme.cardWhite,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       title: Row(
         children: [
-          const Icon(Icons.preview, color: Colors.blue),
-          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: const BoxDecoration(color: AppTheme.softGreen, shape: BoxShape.circle),
+            child: const Icon(Icons.shield_outlined, color: AppTheme.primaryGreen, size: 20),
+          ),
+          const SizedBox(width: 12),
           Expanded(
             child: Text(
-              'Policy Preview: ${preview.policyTitle}',
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              'Policy Simulation: ${preview.policyTitle}',
+              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: AppTheme.textDark),
             ),
           ),
         ],
       ),
       content: SizedBox(
-        width: 800,
-        height: 500,
+        width: 760,
+        height: 480,
         child: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -32,18 +39,18 @@ class PolicyPreviewDialog extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.blueGrey[50],
+                  color: AppTheme.softGreen,
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.blueGrey[200]!),
+                  border: Border.all(color: AppTheme.paleGreen),
                 ),
                 child: const Row(
                   children: [
-                    Icon(Icons.shield_outlined, color: Colors.blueGrey),
-                    SizedBox(width: 12),
+                    Icon(Icons.lock_outline, color: AppTheme.primaryGreen, size: 18),
+                    SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        'DEFAULT RULE = DENY. Anything not explicitly marked as ALLOW below will be automatically blocked on student devices.',
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                        'DEFAULT-DENY ENFORCEMENT: Any resource, browser, or domain not explicitly marked as ALLOW is strictly BLOCKED on student endpoints.',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppTheme.primaryGreen),
                       ),
                     ),
                   ],
@@ -52,7 +59,7 @@ class PolicyPreviewDialog extends StatelessWidget {
               const SizedBox(height: 16),
 
               // 1. Browsers Overview
-              const Text('Browser Authorization Summary', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+              const Text('Browser Authorization', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppTheme.textDark)),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
@@ -60,16 +67,16 @@ class PolicyPreviewDialog extends StatelessWidget {
                 children: preview.browserSummary.map((b) {
                   final isAllow = b['status'] == 'ALLOW';
                   return Chip(
-                    avatar: Icon(isAllow ? Icons.check_circle : Icons.cancel, color: isAllow ? Colors.green : Colors.red, size: 18),
-                    label: Text('${b['name']}: ${b['status']}'),
-                    backgroundColor: isAllow ? Colors.green[50] : Colors.red[50],
+                    avatar: Icon(isAllow ? Icons.check_circle : Icons.cancel, color: isAllow ? AppTheme.successGreen : AppTheme.errorMuted, size: 16),
+                    label: Text('${b['name']}: ${b['status']}', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isAllow ? AppTheme.successGreen : AppTheme.errorMuted)),
+                    backgroundColor: isAllow ? AppTheme.softGreen : const Color(0xFFFDE8E8),
                   );
                 }).toList(),
               ),
               const SizedBox(height: 16),
 
               // 2. AI Services Overview
-              const Text('AI Services Authorization Summary', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+              const Text('AI Services Authorization', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppTheme.textDark)),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
@@ -77,19 +84,19 @@ class PolicyPreviewDialog extends StatelessWidget {
                 children: preview.aiSummary.map((a) {
                   final isAllow = a['status'] == 'ALLOW';
                   return Chip(
-                    avatar: Icon(isAllow ? Icons.check_circle : Icons.cancel, color: isAllow ? Colors.purple : Colors.grey, size: 18),
-                    label: Text('${a['name']}: ${a['status']}'),
-                    backgroundColor: isAllow ? Colors.purple[50] : Colors.grey[100],
+                    avatar: Icon(isAllow ? Icons.check_circle : Icons.cancel, color: isAllow ? const Color(0xFF6B4C9A) : AppTheme.textMuted, size: 16),
+                    label: Text('${a['name']}: ${a['status']}', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isAllow ? const Color(0xFF6B4C9A) : AppTheme.textMuted)),
+                    backgroundColor: isAllow ? const Color(0xFFF3E8FF) : AppTheme.creamBg,
                   );
                 }).toList(),
               ),
               const SizedBox(height: 20),
 
               // 3. Matrix Rules Breakdown Table
-              const Text('Browser ↔ AI Matrix Permutations', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+              const Text('Permutation Evaluation Table', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppTheme.textDark)),
               const SizedBox(height: 8),
               Table(
-                border: TableBorder.all(color: Colors.grey[300]!, width: 1),
+                border: TableBorder.all(color: AppTheme.borderGray, width: 1),
                 columnWidths: const {
                   0: FlexColumnWidth(2),
                   1: FlexColumnWidth(2),
@@ -98,39 +105,39 @@ class PolicyPreviewDialog extends StatelessWidget {
                 },
                 children: [
                   TableRow(
-                    decoration: BoxDecoration(color: Colors.grey[200]),
+                    decoration: const BoxDecoration(color: AppTheme.creamBg),
                     children: const [
-                      Padding(padding: EdgeInsets.all(8.0), child: Text('Browser', style: TextStyle(fontWeight: FontWeight.bold))),
-                      Padding(padding: EdgeInsets.all(8.0), child: Text('AI Service', style: TextStyle(fontWeight: FontWeight.bold))),
-                      Padding(padding: EdgeInsets.all(8.0), child: Text('Permission', style: TextStyle(fontWeight: FontWeight.bold))),
-                      Padding(padding: EdgeInsets.all(8.0), child: Text('Evaluation Rationale', style: TextStyle(fontWeight: FontWeight.bold))),
+                      Padding(padding: EdgeInsets.all(8.0), child: Text('Browser', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppTheme.textDark))),
+                      Padding(padding: EdgeInsets.all(8.0), child: Text('AI Resource', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppTheme.textDark))),
+                      Padding(padding: EdgeInsets.all(8.0), child: Text('Result', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppTheme.textDark))),
+                      Padding(padding: EdgeInsets.all(8.0), child: Text('Rationale', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppTheme.textDark))),
                     ],
                   ),
                   ...preview.matrixRules.map((rule) {
                     final isAllow = rule.pairPermission == 'ALLOW' || rule.pairPermission == 'ALLOW_BROWSER_NO_AI';
                     return TableRow(
                       children: [
-                        Padding(padding: const EdgeInsets.all(8.0), child: Text(rule.browserName)),
-                        Padding(padding: const EdgeInsets.all(8.0), child: Text(rule.aiName)),
+                        Padding(padding: const EdgeInsets.all(8.0), child: Text(rule.browserName, style: const TextStyle(fontSize: 12))),
+                        Padding(padding: const EdgeInsets.all(8.0), child: Text(rule.aiName, style: const TextStyle(fontSize: 12))),
                         Padding(
                           padding: const EdgeInsets.all(8.0),
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
-                              color: isAllow ? Colors.green[100] : Colors.red[100],
+                              color: isAllow ? AppTheme.softGreen : const Color(0xFFFDE8E8),
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
                               rule.pairPermission,
                               style: TextStyle(
-                                color: isAllow ? Colors.green[900] : Colors.red[900],
+                                color: isAllow ? AppTheme.primaryGreen : AppTheme.errorMuted,
                                 fontWeight: FontWeight.bold,
-                                fontSize: 12,
+                                fontSize: 11,
                               ),
                             ),
                           ),
                         ),
-                        Padding(padding: const EdgeInsets.all(8.0), child: Text(rule.reason, style: const TextStyle(fontSize: 12))),
+                        Padding(padding: const EdgeInsets.all(8.0), child: Text(rule.reason, style: const TextStyle(fontSize: 11, color: AppTheme.textMuted))),
                       ],
                     );
                   }).toList(),
@@ -143,7 +150,11 @@ class PolicyPreviewDialog extends StatelessWidget {
       actions: [
         ElevatedButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Close Preview'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppTheme.primaryGreen,
+            elevation: 0,
+          ),
+          child: const Text('Close Simulation', style: TextStyle(color: Colors.white)),
         ),
       ],
     );

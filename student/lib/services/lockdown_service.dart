@@ -218,6 +218,15 @@ class LockdownService {
         session.startTime = hb.startTime;
       }
 
+      // Process signed policy payload if provided
+      if (hb.signedPolicy != null) {
+        final isValid = PolicyVerifier.verifyPolicyPayload(hb.signedPolicy!);
+        if (isValid) {
+          await PolicyVerifier.savePolicyToCache(hb.signedPolicy!);
+          await BrowserPolicyGuard.applyManagedBrowserPolicies(hb.signedPolicy!);
+        }
+      }
+
       // Sync remaining seconds from authoritative server calculation
       if (hb.isExamActive && hb.examStatus == "active") {
         if (hb.timeRemainingSeconds > 0) {

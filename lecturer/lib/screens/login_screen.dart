@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import '../main.dart';
 import '../services/api_service.dart';
 
 class LoginScreen extends StatefulWidget {
-  final VoidCallback onLoginSuccess;
+  final Function(String name, String email) onLoginSuccess;
   const LoginScreen({super.key, required this.onLoginSuccess});
 
   @override
@@ -11,295 +12,269 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   bool isLoginMode = true;
-  final usernameController = TextEditingController();
-  final emailController = TextEditingController();
+  final identifierController = TextEditingController();
+  final registerNameController = TextEditingController();
+  final registerEmailController = TextEditingController();
   final passwordController = TextEditingController();
+  final confirmPasswordController = TextEditingController();
   bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
   bool isLoading = false;
   String? errorMessage;
 
   Future<void> _handleSubmit() async {
-    final username = usernameController.text.trim();
     final password = passwordController.text.trim();
-    final email = emailController.text.trim();
 
-    if (username.isEmpty || password.isEmpty || (!isLoginMode && email.isEmpty)) {
-      setState(() {
-        errorMessage = "Please fill in all required fields.";
-      });
-      return;
-    }
-
-    setState(() {
-      isLoading = true;
-      errorMessage = null;
-    });
-
-    try {
-      if (isLoginMode) {
-        await ApiService.login(username, password);
-        widget.onLoginSuccess();
-      } else {
-        await ApiService.register(username, email, password);
-        // Auto login after register with dedicated username & password
-        await ApiService.login(username, password);
-        widget.onLoginSuccess();
-      }
-    } catch (e) {
-      final errStr = e.toString().replaceAll('Exception: ', '');
-      if (errStr.contains('Failed to fetch') || errStr.contains('ClientException') || errStr.contains('SocketException')) {
+    if (isLoginMode) {
+      final identifier = identifierController.text.trim();
+      if (identifier.isEmpty || password.isEmpty) {
         setState(() {
-          errorMessage = "Cannot connect to Backend Server (http://localhost:8000).\nPlease make sure the server is running:\n'uvicorn app.main:app --reload --port 8000'";
+          errorMessage = "Please enter your Email or Platform Name, and Password.";
         });
-      } else {
-        setState(() {
-          errorMessage = errStr;
-        });
+        return;
       }
-    } finally {
-      if (mounted) {
-        setState(() {
-          isLoading = false;
-        });
-      }
-    }
-  }
 
-  Future<void> _handleGoogleAuth() async {
-    final googleEmailController = TextEditingController(text: "malikalelica@gmail.com");
-    final googleNameController = TextEditingController(text: "Lelica Malika");
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF161B22),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            Image.network(
-              'https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg',
-              height: 24,
-              errorBuilder: (_, __, ___) => const Icon(Icons.account_circle, color: Color(0xFF4285F4)),
-            ),
-            const SizedBox(width: 12),
-            const Text("Google Account Sign In", style: TextStyle(color: Colors.white, fontSize: 18)),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              "Sign in or create a lecturer account instantly using your Google credentials:",
-              style: TextStyle(color: Color(0xFF8B949E), fontSize: 13),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: googleEmailController,
-              style: const TextStyle(color: Colors.white),
-              decoration: _inputDecoration("Google Email", Icons.email_outlined),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: googleNameController,
-              style: const TextStyle(color: Colors.white),
-              decoration: _inputDecoration("Full Name", Icons.person_outline),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text("Cancel", style: TextStyle(color: Color(0xFF8B949E))),
-          ),
-          ElevatedButton.icon(
-            onPressed: () => Navigator.pop(context, true),
-            icon: const Icon(Icons.login, color: Colors.white, size: 18),
-            label: const Text("Continue with Google", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF4285F4),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true) {
       setState(() {
         isLoading = true;
         errorMessage = null;
       });
 
       try {
-        await ApiService.googleLogin(
-          googleEmailController.text.trim(),
-          googleNameController.text.trim(),
-        );
-        widget.onLoginSuccess();
+        final res = await ApiService.login(identifier, password);
+        final user = res['user'] ?? {};
+        final name = user['username'] ?? identifier;
+        final email = user['email'] ?? "";
+        widget.onLoginSuccess(name, email);
       } catch (e) {
-        final errStr = e.toString().replaceAll('Exception: ', '');
-        if (errStr.contains('Failed to fetch') || errStr.contains('ClientException')) {
-          setState(() {
-            errorMessage = "Cannot connect to Backend Server (http://localhost:8000).\nPlease start backend server with 'uvicorn app.main:app --reload --port 8000'";
-          });
-        } else {
-          setState(() {
-            errorMessage = errStr;
-          });
-        }
+        _handleError(e);
+      } finally {
+        if (mounted) setState(() => isLoading = false);
+      }
+    } else {
+      final name = registerNameController.text.trim();
+      final email = registerEmailController.text.trim();
+      final confirmPassword = confirmPasswordController.text.trim();
+
+      if (name.isEmpty || email.isEmpty || password.isEmpty || confirmPassword.isEmpty) {
+        setState(() {
+          errorMessage = "Please fill in all registration fields.";
+        });
+        return;
+      }
+
+      if (password != confirmPassword) {
+        setState(() {
+          errorMessage = "Passwords do not match.";
+        });
+        return;
+      }
+
+      if (password.length < 6) {
+        setState(() {
+          errorMessage = "Password must be at least 6 characters long.";
+        });
+        return;
+      }
+
+      setState(() {
+        isLoading = true;
+        errorMessage = null;
+      });
+
+      try {
+        await ApiService.register(name, email, password);
+        final res = await ApiService.login(email, password);
+        final user = res['user'] ?? {};
+        widget.onLoginSuccess(user['username'] ?? name, user['email'] ?? email);
+      } catch (e) {
+        _handleError(e);
       } finally {
         if (mounted) setState(() => isLoading = false);
       }
     }
   }
 
+  void _handleError(dynamic e) {
+    final errStr = e.toString().replaceAll('Exception: ', '');
+    if (errStr.contains('Failed to fetch') || errStr.contains('ClientException') || errStr.contains('SocketException')) {
+      setState(() {
+        errorMessage = "Cannot connect to Kasim Security Server (http://localhost:8000).\nPlease make sure the backend server is running.";
+      });
+    } else {
+      setState(() {
+        errorMessage = errStr;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0D1117),
+      backgroundColor: AppTheme.creamBg,
       body: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
           child: Container(
-            width: 440,
-            padding: const EdgeInsets.all(32),
+            width: 460,
+            padding: const EdgeInsets.all(36),
             decoration: BoxDecoration(
-              color: const Color(0xFF161B22),
+              color: AppTheme.cardWhite,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFF30363D)),
-              boxShadow: const [
+              border: Border.all(color: AppTheme.borderGray, width: 1),
+              boxShadow: [
                 BoxShadow(
-                  color: Colors.black54,
-                  blurRadius: 20,
-                  offset: Offset(0, 10),
-                )
+                  color: Colors.black.withAlpha(10),
+                  blurRadius: 24,
+                  offset: const Offset(0, 8),
+                ),
               ],
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.security, color: Color(0xFF58A6FF), size: 32),
-                    SizedBox(width: 10),
-                    Flexible(
-                      child: Text(
-                        "KASIM LECTURER",
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                          letterSpacing: 1.2,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                // Academic Platform Brand Header
+                Center(
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: AppTheme.softGreen,
+                      shape: BoxShape.circle,
                     ),
-                  ],
+                    child: const Icon(
+                      Icons.shield_outlined,
+                      color: AppTheme.primaryGreen,
+                      size: 32,
+                    ),
+                  ),
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  isLoginMode ? "Sign in with your credentials or Google" : "Create a Lecturer Account with dedicated password",
+                const SizedBox(height: 16),
+                const Text(
+                  "KASIM ACCESS CONTROL",
                   textAlign: TextAlign.center,
-                  style: const TextStyle(color: Color(0xFF8B949E), fontSize: 13),
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    color: AppTheme.textDark,
+                    letterSpacing: 1.5,
+                  ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 6),
+                Text(
+                  isLoginMode
+                      ? "Lecturer Control Plane & Exam Session Portal"
+                      : "Create your academic lecturer account",
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: AppTheme.textMuted,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
+                const SizedBox(height: 28),
+
+                // Error Message Display
                 if (errorMessage != null) ...[
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF3D1418),
+                      color: const Color(0xFFFDE8E8),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFFF85149)),
+                      border: Border.all(color: const Color(0xFFF8B4B4)),
                     ),
-                    child: Text(
-                      errorMessage!,
-                      style: const TextStyle(color: Color(0xFFFF7B72), fontSize: 13),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.error_outline, color: AppTheme.errorMuted, size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            errorMessage!,
+                            style: const TextStyle(color: AppTheme.errorMuted, fontSize: 13, fontWeight: FontWeight.w500),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 20),
                 ],
-                // Quick Google Sign In Button
-                OutlinedButton.icon(
-                  onPressed: isLoading ? null : _handleGoogleAuth,
-                  icon: Container(
-                    padding: const EdgeInsets.all(2),
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.g_mobiledata, color: Color(0xFF4285F4), size: 22),
-                  ),
-                  label: Text(
-                    isLoginMode ? "Sign in with Google" : "Register with Google Account",
-                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    side: const BorderSide(color: Color(0xFF4285F4)),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                const Row(
-                  children: [
-                    Expanded(child: Divider(color: Color(0xFF30363D))),
-                    Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 12),
-                      child: Text("OR DEDICATED LOGIN", style: TextStyle(color: Color(0xFF8B949E), fontSize: 11, fontWeight: FontWeight.bold)),
-                    ),
-                    Expanded(child: Divider(color: Color(0xFF30363D))),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                TextField(
-                  controller: usernameController,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: _inputDecoration("Dedicated Username", Icons.person_outline),
-                ),
-                const SizedBox(height: 16),
-                if (!isLoginMode) ...[
+
+                if (isLoginMode) ...[
+                  // Identifier Field (Email OR Platform Name)
                   TextField(
-                    controller: emailController,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: _inputDecoration("Email Address", Icons.email_outlined),
+                    controller: identifierController,
+                    style: const TextStyle(color: AppTheme.textDark, fontSize: 14),
+                    decoration: _inputDecoration("Email or Platform Name", Icons.person_outline),
+                  ),
+                  const SizedBox(height: 16),
+                ] else ...[
+                  // Registration Fields
+                  TextField(
+                    controller: registerNameController,
+                    style: const TextStyle(color: AppTheme.textDark, fontSize: 14),
+                    decoration: _inputDecoration("Full Name / Platform Name", Icons.badge_outlined),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: registerEmailController,
+                    style: const TextStyle(color: AppTheme.textDark, fontSize: 14),
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: _inputDecoration("Institutional Email Address", Icons.email_outlined),
                   ),
                   const SizedBox(height: 16),
                 ],
-                // Password Field with Password Visibility Eye Toggle Icon
+
+                // Password Field
                 TextField(
                   controller: passwordController,
                   obscureText: _obscurePassword,
-                  style: const TextStyle(color: Colors.white),
+                  style: const TextStyle(color: AppTheme.textDark, fontSize: 14),
                   decoration: _inputDecoration(
-                    "Dedicated Password",
+                    "Password",
                     Icons.lock_outline,
                     suffixIcon: IconButton(
                       icon: Icon(
-                        _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                        color: const Color(0xFF8B949E),
+                        _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                        color: AppTheme.textMuted,
                         size: 20,
                       ),
-                      onPressed: () {
-                        setState(() {
-                          _obscurePassword = !_obscurePassword;
-                        });
-                      },
-                      tooltip: _obscurePassword ? "Show Password" : "Hide Password",
+                      onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                     ),
                   ),
                 ),
-                const SizedBox(height: 24),
+
+                if (!isLoginMode) ...[
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: confirmPasswordController,
+                    obscureText: _obscureConfirmPassword,
+                    style: const TextStyle(color: AppTheme.textDark, fontSize: 14),
+                    decoration: _inputDecoration(
+                      "Confirm Password",
+                      Icons.lock_clock_outlined,
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscureConfirmPassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                          color: AppTheme.textMuted,
+                          size: 20,
+                        ),
+                        onPressed: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
+                      ),
+                    ),
+                  ),
+                ],
+
+                const SizedBox(height: 26),
+
+                // Submit Button
                 ElevatedButton(
                   onPressed: isLoading ? null : _handleSubmit,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF238636),
+                    backgroundColor: AppTheme.primaryGreen,
+                    foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                   child: isLoading
                       ? const SizedBox(
@@ -308,23 +283,29 @@ class _LoginScreenState extends State<LoginScreen> {
                           child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                         )
                       : Text(
-                          isLoginMode ? "Sign In with Password" : "Register Dedicated Account",
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                          isLoginMode ? "Sign In to Control Plane" : "Register Dedicated Account",
+                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
                         ),
                 ),
-                const SizedBox(height: 16),
-                TextButton(
-                  onPressed: () {
-                    setState(() {
-                      isLoginMode = !isLoginMode;
-                      errorMessage = null;
-                    });
-                  },
-                  child: Text(
-                    isLoginMode ? "Don't have an account? Register here" : "Already have an account? Sign in",
-                    style: const TextStyle(color: Color(0xFF58A6FF)),
+
+                const SizedBox(height: 18),
+
+                // Mode Toggle
+                Center(
+                  child: TextButton(
+                    onPressed: () {
+                      setState(() {
+                        isLoginMode = !isLoginMode;
+                        errorMessage = null;
+                      });
+                    },
+                    style: TextButton.styleFrom(foregroundColor: AppTheme.primaryGreen),
+                    child: Text(
+                      isLoginMode ? "New lecturer? Create an account" : "Already registered? Sign in here",
+                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                    ),
                   ),
-                )
+                ),
               ],
             ),
           ),
@@ -336,18 +317,19 @@ class _LoginScreenState extends State<LoginScreen> {
   InputDecoration _inputDecoration(String label, IconData icon, {Widget? suffixIcon}) {
     return InputDecoration(
       labelText: label,
-      labelStyle: const TextStyle(color: Color(0xFF8B949E)),
-      prefixIcon: Icon(icon, color: const Color(0xFF8B949E)),
+      labelStyle: const TextStyle(color: AppTheme.textMuted, fontSize: 13),
+      prefixIcon: Icon(icon, color: AppTheme.textMuted, size: 20),
       suffixIcon: suffixIcon,
       filled: true,
-      fillColor: const Color(0xFF0D1117),
+      fillColor: AppTheme.creamBg,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       enabledBorder: OutlineInputBorder(
-        borderSide: const BorderSide(color: Color(0xFF30363D)),
-        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: AppTheme.borderGray),
+        borderRadius: BorderRadius.circular(10),
       ),
       focusedBorder: OutlineInputBorder(
-        borderSide: const BorderSide(color: Color(0xFF58A6FF)),
-        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: AppTheme.primaryGreen, width: 1.5),
+        borderRadius: BorderRadius.circular(10),
       ),
     );
   }

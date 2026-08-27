@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../main.dart';
 import '../models/resource.dart';
 
 class MatrixBuilderWidget extends StatefulWidget {
@@ -42,174 +43,106 @@ class _MatrixBuilderWidgetState extends State<MatrixBuilderWidget> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // 1. Browser Authorization Selection
-        const Text(
-          '1. Select Authorized Browsers',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+    if (_allowedBrowsers.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFDE8E8),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFFF8B4B4)),
         ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          children: widget.browsers.map((b) {
-            final isSelected = _allowedBrowsers.contains(b.id);
-            return FilterChip(
-              label: Text(b.name),
-              selected: isSelected,
-              selectedColor: Colors.blue.withOpacity(0.2),
-              onSelected: (selected) {
-                setState(() {
-                  if (selected) {
-                    _allowedBrowsers.add(b.id);
-                    _matrix.putIfAbsent(b.id, () => []);
-                  } else {
-                    _allowedBrowsers.remove(b.id);
-                    _matrix.remove(b.id);
-                  }
-                  _notify();
-                });
-              },
-            );
-          }).toList(),
-        ),
-        const SizedBox(height: 20),
-
-        // 2. AI Services Authorization Selection
-        const Text(
-          '2. Select Authorized AI Services',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          children: widget.aiServices.map((a) {
-            final isSelected = _allowedAi.contains(a.id);
-            return FilterChip(
-              label: Text(a.name),
-              selected: isSelected,
-              selectedColor: Colors.purple.withOpacity(0.2),
-              onSelected: (selected) {
-                setState(() {
-                  if (selected) {
-                    _allowedAi.add(a.id);
-                  } else {
-                    _allowedAi.remove(a.id);
-                    // Remove from all matrix mappings
-                    _matrix.forEach((k, v) => v.remove(a.id));
-                  }
-                  _notify();
-                });
-              },
-            );
-          }).toList(),
-        ),
-        const SizedBox(height: 24),
-
-        // 3. Browser ↔ AI Permission Matrix Table
-        const Text(
-          '3. Configure Browser ↔ AI Permission Matrix',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'Check specific AI services allowed for each browser. Unchecked pairs or browsers with "AI: NONE" deny AI access.',
-          style: TextStyle(color: Colors.grey[600], fontSize: 13),
-        ),
-        const SizedBox(height: 12),
-
-        if (_allowedBrowsers.isEmpty)
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.red[50],
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.red[200]!),
+        child: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: AppTheme.errorMuted),
+            SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'DEFAULT DENY: No browsers authorized in Step 2. All browser activity will be blocked on student endpoints.',
+                style: TextStyle(color: AppTheme.errorMuted, fontWeight: FontWeight.bold, fontSize: 13),
+              ),
             ),
-            child: const Row(
-              children: [
-                Icon(Icons.warning, color: Colors.red),
-                SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'DEFAULT DENY: No browsers selected. All browser access on student desktops will be BLOCKED.',
-                    style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
-            ),
-          )
-        else
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: DataTable(
-              headingRowColor: MaterialStateProperty.all(Colors.grey[100]),
-              columns: [
-                const DataColumn(label: Text('Browser', style: TextStyle(fontWeight: FontWeight.bold))),
-                const DataColumn(label: Text('Browser Status', style: TextStyle(fontWeight: FontWeight.bold))),
-                ...widget.aiServices.map((a) => DataColumn(
-                  label: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppTheme.cardWhite,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppTheme.borderGray),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: DataTable(
+          headingRowColor: WidgetStateProperty.all(AppTheme.creamBg),
+          dataRowColor: WidgetStateProperty.all(AppTheme.cardWhite),
+          columns: [
+            const DataColumn(label: Text('Authorized Browser', style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.textDark))),
+            const DataColumn(label: Text('Mode', style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.textDark))),
+            ...widget.aiServices.where((a) => _allowedAi.contains(a.id)).map((a) => DataColumn(
+              label: Text(a.name, style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF6B4C9A))),
+            )),
+          ],
+          rows: widget.browsers.where((b) => _allowedBrowsers.contains(b.id)).map((b) {
+            final allowedForBrowser = _matrix[b.id] ?? [];
+            final hasNoAi = allowedForBrowser.isEmpty;
+
+            return DataRow(
+              cells: [
+                DataCell(
+                  Row(
                     children: [
-                      Text(a.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                      Text(_allowedAi.contains(a.id) ? '(Allowed)' : '(Denied)',
-                          style: TextStyle(fontSize: 10, color: _allowedAi.contains(a.id) ? Colors.green : Colors.red)),
+                      const Icon(Icons.language, color: AppTheme.primaryGreen, size: 16),
+                      const SizedBox(width: 8),
+                      Text(b.name, style: const TextStyle(fontWeight: FontWeight.w600, color: AppTheme.textDark)),
                     ],
                   ),
-                )),
-              ],
-              rows: widget.browsers.where((b) => _allowedBrowsers.contains(b.id)).map((b) {
-                final allowedForBrowser = _matrix[b.id] ?? [];
-                final hasNoAi = allowedForBrowser.isEmpty;
-
-                return DataRow(
-                  cells: [
-                    DataCell(Text(b.name, style: const TextStyle(fontWeight: FontWeight.w600))),
-                    DataCell(
-                      Chip(
-                        label: Text(hasNoAi ? 'ALLOW (AI: NONE)' : 'ALLOW'),
-                        backgroundColor: hasNoAi ? Colors.orange[100] : Colors.green[100],
-                        labelStyle: TextStyle(
-                          color: hasNoAi ? Colors.orange[900] : Colors.green[900],
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
+                ),
+                DataCell(
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: hasNoAi ? const Color(0xFFFEF3C7) : AppTheme.softGreen,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      hasNoAi ? 'NO AI (WEB ONLY)' : 'AI AUTHORIZED',
+                      style: TextStyle(
+                        color: hasNoAi ? AppTheme.warningAmber : AppTheme.primaryGreen,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
-                    ...widget.aiServices.map((a) {
-                      final isAiGloballyAllowed = _allowedAi.contains(a.id);
-                      final isChecked = allowedForBrowser.contains(a.id);
-
-                      return DataCell(
-                        Checkbox(
-                          value: isChecked && isAiGloballyAllowed,
-                          onChanged: isAiGloballyAllowed
-                              ? (val) {
-                                  setState(() {
-                                    if (val == true) {
-                                      if (!_matrix.containsKey(b.id)) {
-                                        _matrix[b.id] = [];
-                                      }
-                                      if (!_matrix[b.id]!.contains(a.id)) {
-                                        _matrix[b.id]!.add(a.id);
-                                      }
-                                    } else {
-                                      _matrix[b.id]?.remove(a.id);
-                                    }
-                                    _notify();
-                                  });
-                                }
-                              : null, // Disabled if AI is globally denied
-                        ),
-                      );
-                    }).toList(),
-                  ],
-                );
-              }).toList(),
-            ),
-          ),
-      ],
+                  ),
+                ),
+                ...widget.aiServices.where((a) => _allowedAi.contains(a.id)).map((a) {
+                  final isChecked = allowedForBrowser.contains(a.id);
+                  return DataCell(
+                    Checkbox(
+                      value: isChecked,
+                      activeColor: AppTheme.primaryGreen,
+                      onChanged: (val) {
+                        setState(() {
+                          if (val == true) {
+                            _matrix.putIfAbsent(b.id, () => []);
+                            if (!_matrix[b.id]!.contains(a.id)) {
+                              _matrix[b.id]!.add(a.id);
+                            }
+                          } else {
+                            _matrix[b.id]?.remove(a.id);
+                          }
+                          _notify();
+                        });
+                      },
+                    ),
+                  );
+                }).toList(),
+              ],
+            );
+          }).toList(),
+        ),
+      ),
     );
   }
 }

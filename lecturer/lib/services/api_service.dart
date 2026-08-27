@@ -65,9 +65,10 @@ class ApiService {
     }
   }
 
-  static Future<Map<String, dynamic>> login(String username, String password) async {
+  static Future<Map<String, dynamic>> login(String identifier, String password) async {
     final response = await _postRequest('/auth/login', {
-      'username': username,
+      'identifier': identifier,
+      'username': identifier,
       'password': password,
     });
 
