@@ -1,0 +1,12 @@
+[Desktop Entry]
+Version=1.0
+Name=Kasim Lecturer Control Panel
+Comment=Lecturer interface for Kasim exam security and monitoring
+Exec=/home/lelica/Desktop/kasim/Kasim-Reconstructed-v3/kasim-reconstructed/lecturer/run_lecturer_app.sh
+Icon=preferences-system-security
+Type=Application
+Terminal=true
+Categories=Education;Utility;WebBrowser;
+Keywords=exam;monitoring;education;kasim;security;lecturer
+X-Ubuntu-Gettext-Domain=kasim
+MimeType=

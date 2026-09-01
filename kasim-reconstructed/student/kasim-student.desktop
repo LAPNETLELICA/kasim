@@ -1,0 +1,12 @@
+[Desktop Entry]
+Version=1.0
+Name=Kasim Student Exam Client
+Comment=Secure exam application client for Kasim
+Exec=/home/lelica/Desktop/kasim/Kasim-Reconstructed-v3/kasim-reconstructed/student/run_student_app.sh
+Icon=preferences-system-privacy
+Type=Application
+Terminal=true
+Categories=Education;Utility;
+Keywords=exam;test;education;kasim;security
+X-Ubuntu-Gettext-Domain=kasim
+MimeType=

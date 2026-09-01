@@ -354,11 +354,13 @@ class _CreateExamSessionDialogState extends State<CreateExamSessionDialog> {
       ],
       if (policy.needsAi) ...[
         const Text('AI identity', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppTheme.textDark)),
-        const SizedBox(height: 8),
+        const SizedBox(height: 4),
+        const Text('Specify the AI service name and the domains where it can be accessed. Students can only connect to these specified domains during the exam.', style: TextStyle(fontSize: 11, color: AppTheme.textMuted, height: 1.4)),
+        const SizedBox(height: 12),
         Row(children: [
           Expanded(child: TextField(controller: aiNameController, decoration: _input('AI service name', 'e.g. University Tutor AI'))),
           const SizedBox(width: 12),
-          Expanded(child: TextField(controller: aiDomainsController, decoration: _input('Domains', 'tutor.example.edu, api.example.edu'))),
+          Expanded(child: TextField(controller: aiDomainsController, decoration: _input('Domains (comma-separated)', 'tutor.example.edu, api.example.edu'))),
         ]),
         const SizedBox(height: 12),
         TextField(controller: aiDesktopController, decoration: _input('Desktop executable aliases (optional)', 'TutorAI.exe')),

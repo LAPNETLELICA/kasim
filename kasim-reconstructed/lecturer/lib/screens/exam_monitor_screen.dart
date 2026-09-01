@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:html' as html;
+import 'dart:io' as io;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../main.dart';
@@ -77,12 +77,21 @@ class _ExamMonitorScreenState extends State<ExamMonitorScreen> {
       final contentDisposition = response.headers['content-disposition'] ?? '';
       final match = RegExp(r'filename="?([^";]+)').firstMatch(contentDisposition);
       final filename = match?.group(1) ?? '${exam!.title}-${DateFormat('yyyy-MM-dd').format(exam!.createdAt)}.zip';
-      final blob = html.Blob([response.bodyBytes], 'application/zip');
-      final url = html.Url.createObjectUrlFromBlob(blob);
-      html.AnchorElement(href: url)
-        ..download = filename
-        ..click();
-      html.Url.revokeObjectUrl(url);
+      
+      // Save to Downloads folder
+      final homeDir = io.Platform.environment['HOME'] ?? '/tmp';
+      final downloadDir = io.Directory('$homeDir/Downloads');
+      if (!await downloadDir.exists()) {
+        await downloadDir.create(recursive: true);
+      }
+      final file = io.File('${downloadDir.path}/$filename');
+      await file.writeAsBytes(response.bodyBytes);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Downloaded to: ${file.path}')),
+        );
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
