@@ -36,10 +36,10 @@ fi
 echo "📦 Installing dependencies..."
 flutter pub get
 
-# Run the app in web browser
+# Run the app in web browser (Chrome)
 echo "🚀 Starting the application in your default browser..."
 echo ""
 echo "The app will be available at: http://localhost:7890"
 echo ""
-flutter run -d web --web-port=7890
+flutter run -d chrome --web-port=7890
 
