@@ -18,13 +18,13 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# CORS setup for the lecturer web dashboard. Desktop requests are not subject
+# CORS setup for the lecturer web dashboard and Flutter apps. Desktop requests are not subject
 # to browser CORS, so production should set explicit HTTPS origins.
 allowed_origins = [
     item.strip()
     for item in os.getenv(
         "CORS_ORIGINS",
-        "http://localhost:3000,http://127.0.0.1:3000",
+        "http://localhost:3000,http://127.0.0.1:3000,http://localhost:7890,http://127.0.0.1:7890,http://localhost:7891,http://127.0.0.1:7891",
     ).split(",")
     if item.strip()
 ]
